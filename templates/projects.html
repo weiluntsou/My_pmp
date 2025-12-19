@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h2>專案列表</h2>
+    <div class="no-present">
+        <button class="btn btn-primary" onclick="openNewProjectModal()">+ New Project</button>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card" style="padding: 10px;">
+    <div class="grid-3">
+        <select id="filterYear" class="btn" style="width: 100%; text-align: left;" onchange="applyFilters()">
+            <option value="">All Years</option>
+        </select>
+        <select id="filterCft" class="btn" style="width: 100%; text-align: left;" onchange="applyFilters()">
+            <option value="">All CFTs</option>
+        </select>
+        <select id="filterStatus" class="btn" style="width: 100%; text-align: left;" onchange="applyFilters()">
+            <option value="">All Status</option>
+            <option value="Planning">Planning</option>
+            <option value="Development">Development</option>
+            <option value="Complete">Complete</option>
+            <option value="Maintenance">Maintenance</option>
+        </select>
+    </div>
+</div>
+
+<!-- Active Projects List -->
+<h3 style="margin-top: 20px;">開發中專案 (Active)</h3>
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Project Name</th>
+                <th>需求窗口</th>
+                <th>CFT</th>
+                <th>負責開發工程師</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="activeProjectsBody">
+            <!-- Dynamic Content -->
+        </tbody>
+    </table>
+</div>
+
+<!-- Maintenance Projects List -->
+<h3 style="margin-top: 30px;">維運專案 (Maintenance)</h3>
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Project Name</th>
+                <th>Request Unit</th>
+                <th>CFT</th>
+                <th>Lead</th>
+                <th>Close Date</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="maintenanceProjectsBody">
+            <!-- Dynamic Content -->
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal -->
+<div id="newProjectModal"
+    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 100; justify-content: center; align-items: center;">
+    <div class="card" style="width: 500px; max-width: 90%;">
+        <h3>Initialize New Project</h3>
+        <form id="newProjectForm" onsubmit="submitNewProject(event)"
+            style="display: flex; flex-direction: column; gap: 15px;">
+            <input type="text" id="npName" placeholder="Project Name" class="btn" style="text-align: left;" required>
+
+            <div class="grid-2">
+                <input type="text" id="npDescContact" placeholder="Request Contact (需求窗口)" class="btn"
+                    style="text-align: left;">
+
+                <input list="engineersList" id="npLeadEngineerName" placeholder="Lead Engineer (Name)" class="btn"
+                    style="text-align: left;">
+                <datalist id="engineersList"></datalist>
+            </div>
+
+            <div class="grid-2">
+                <input type="text" id="npCft" placeholder="CFT Unit" class="btn" style="text-align: left;" required>
+                <input type="number" id="npYear" placeholder="Year" value="2025" class="btn" style="text-align: left;"
+                    required onchange="updateStartDate()">
+            </div>
+            <div class="grid-2">
+                <label style="font-size: 0.8em; color: var(--text-secondary);">Kickoff Meeting Date</label>
+                <input type="date" id="npKickoff" class="btn" style="text-align: left;">
+            </div>
+            <div class="grid-2">
+                <input type="date" id="npStartDate" class="btn" style="text-align: left;" required>
+                <input type="number" id="npDuration" placeholder="Duration (Weeks)" value="12" class="btn"
+                    style="text-align: left;" required>
+            </div>
+            <textarea id="npDesc" placeholder="Description" class="btn"
+                style="text-align: left; min-height: 100px;"></textarea>
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+                <button type="button" class="btn" onclick="closeNewProjectModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Initialize</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    let allProjects = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadProjects();
+        loadEngineers();
+    });
+
+    async function loadEngineers() {
+        try {
+            const res = await fetch('/api/projects/engineers');
+            const engineers = await res.json();
+            const datalist = document.getElementById('engineersList');
+            engineers.forEach(e => {
+                const opt = document.createElement('option');
+                opt.value = e.name;
+                datalist.appendChild(opt);
+            });
+        } catch (e) { console.error("Error loading engineers", e); }
+    }
+
+    async function loadProjects() {
+        try {
+            const response = await fetch('/api/projects/');
+            allProjects = await response.json();
+
+            populateFilters();
+            applyFilters();
+
+        } catch (error) {
+            console.error('Error loading projects:', error);
+        }
+    }
+
+    function populateFilters() {
+        const years = new Set(allProjects.map(p => p.year));
+        const cfts = new Set(allProjects.map(p => p.cft_unit));
+
+        const yearSelect = document.getElementById('filterYear');
+        const cftSelect = document.getElementById('filterCft');
+
+        // Clear existing dynamic options (keep first 'All')
+        while (yearSelect.options.length > 1) yearSelect.remove(1);
+        while (cftSelect.options.length > 1) cftSelect.remove(1);
+
+        Array.from(years).sort().reverse().forEach(y => {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.innerText = y;
+            yearSelect.appendChild(opt);
+        });
+
+        Array.from(cfts).sort().forEach(c => {
+            if (!c) return;
+            const opt = document.createElement('option');
+            opt.value = c;
+            opt.innerText = c;
+            cftSelect.appendChild(opt);
+        });
+    }
+
+    function applyFilters() {
+        const year = document.getElementById('filterYear').value;
+        const cft = document.getElementById('filterCft').value;
+        const status = document.getElementById('filterStatus').value;
+
+        const filtered = allProjects.filter(p => {
+            if (year && p.year.toString() !== year) return false;
+            if (cft && p.cft_unit !== cft) return false;
+            if (status && p.status !== status) return false;
+            return true;
+        });
+
+        renderTable(filtered);
+    }
+
+    function renderTable(projects) {
+        const activeTbody = document.getElementById('activeProjectsBody');
+        const maintTbody = document.getElementById('maintenanceProjectsBody');
+        activeTbody.innerHTML = '';
+        maintTbody.innerHTML = '';
+
+        projects.forEach(p => {
+            const isMaintenance = p.status === 'Maintenance' || p.status === 'Deployed';
+            const tr = document.createElement('tr');
+
+            if (isMaintenance) {
+                tr.innerHTML = `
+                    <td>${p.name}</td>
+                    <td>${p.request_unit || '-'}</td>
+                    <td>${p.cft_unit}</td>
+                    <td>${p.lead_engineer ? p.lead_engineer.name : '-'}</td>
+                    <td>${p.closure_date || '-'}</td>
+                    <td>
+                        <a href="/projects/${p.id}" class="btn" style="padding: 2px 8px; font-size: 0.8em; text-decoration: none;">View Log</a>
+                        <button class="btn" onclick="deleteProject(${p.id})" style="padding: 2px 8px; font-size: 0.8em; color: var(--accent-pink); border-color: var(--accent-pink); margin-left: 5px;">Del</button>
+                    </td>
+                `;
+                maintTbody.appendChild(tr);
+            } else {
+                tr.innerHTML = `
+                    <td>${p.name}</td>
+                    <td>${p.request_unit || '-'}</td>
+                    <td>${p.cft_unit}</td>
+                    <td>${p.lead_engineer ? p.lead_engineer.name : '-'}</td>
+                    <td><span style="color: var(--accent-cyan)">${p.status}</span></td>
+                    <td>
+                        <div style="background: rgba(255,255,255,0.1); border-radius: 4px; height: 6px; width: 100px;">
+                            <div style="background: var(--accent-cyan); width: ${p.progress}%; height: 100%; border-radius: 4px;"></div>
+                        </div>
+                    </td>
+                    <td>
+                        <a href="/projects/${p.id}" class="btn" style="padding: 2px 8px; font-size: 0.8em; text-decoration: none;">View</a>
+                        <button class="btn" onclick="deleteProject(${p.id})" style="padding: 2px 8px; font-size: 0.8em; color: var(--accent-pink); border-color: var(--accent-pink);">Del</button>
+                    </td>
+                `;
+                activeTbody.appendChild(tr);
+            }
+        });
+    }
+
+    function openNewProjectModal() {
+        document.getElementById('newProjectModal').style.display = 'flex';
+        updateStartDate();
+    }
+
+    function closeNewProjectModal() {
+        document.getElementById('newProjectModal').style.display = 'none';
+    }
+
+    function updateStartDate() {
+        const year = document.getElementById('npYear').value;
+        if (year) {
+            document.getElementById('npStartDate').value = `${year}-01-01`;
+        }
+    }
+
+    async function submitNewProject(e) {
+        e.preventDefault();
+        const name = document.getElementById('npName').value;
+        const cft = document.getElementById('npCft').value;
+        const year = document.getElementById('npYear').value;
+        const startDate = document.getElementById('npStartDate').value;
+        const duration = document.getElementById('npDuration').value;
+        const kickoff = document.getElementById('npKickoff').value;
+        const desc = document.getElementById('npDesc').value;
+        const requestUnit = document.getElementById('npDescContact').value;
+        const leadName = document.getElementById('npLeadEngineerName').value;
+
+        try {
+            const body = {
+                name: name,
+                cft_unit: cft,
+                year: parseInt(year),
+                start_date: startDate,
+                duration_weeks: parseInt(duration),
+                kickoff_date: kickoff || null,
+                description: desc,
+                request_unit: requestUnit || null,
+                lead_engineer_name: leadName || null
+            };
+
+            const response = await fetch('/api/projects/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (response.ok) {
+                const project = await response.json();
+                closeNewProjectModal();
+                window.location.href = `/projects/${project.id}/planning`;
+            } else {
+                alert('Failed to create project');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error creating project');
+        }
+    }
+
+    async function deleteProject(id) {
+        if (!confirm('Are you sure you want to delete this project?')) return;
+        try {
+            const response = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+            if (response.ok) {
+                loadProjects();
+            } else {
+                alert('Failed to delete project');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error deleting project');
+        }
+    }
+</script>
+{% endblock %}

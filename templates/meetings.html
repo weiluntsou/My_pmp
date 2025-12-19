@@ -1,0 +1,520 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="grid-2" style="grid-template-columns: 3fr 1fr; gap: 20px;">
+    <!-- Left Col: Calendar & Project List -->
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+
+        <!-- Weekly Calendar View -->
+        <div class="card" style="overflow-x: auto;">
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; position: sticky; left: 0;">
+                <h3>Meeting Schedule</h3>
+                <div style="font-size: 0.8em; color: var(--text-secondary);">Recurrent Meetings</div>
+            </div>
+
+            <div id="calendarContainer" style="display: flex; flex-direction: column; gap: 20px; min-width: 100%;">
+                <!-- Dynamic Week Rows -->
+            </div>
+        </div>
+
+        <!-- Project Meeting List -->
+        <div class="card">
+            <h3>Project Queries & Logs</h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">
+                        <th style="text-align: left; padding: 10px;">Project</th>
+                        <th style="text-align: left; padding: 10px;">Scheduled Time</th>
+                        <th style="text-align: left; padding: 10px;">Last Meeting (Actual)</th>
+                        <th style="text-align: left; padding: 10px;">Next Meeting (Plan)</th>
+                        <th style="text-align: right; padding: 10px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="projectListBody">
+                    <!-- Dynamic -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Right Col: Meeting Manager (Sticky Details) -->
+    <div class="card" id="meetingManager" style="height: fit-content; position: sticky; top: 20px;">
+        <h3 id="mgrTitle" style="color: var(--accent-cyan);">Select a Project</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9em;">Click 'Manage' on a project to view details, set
+            schedule, or log minutes.</p>
+
+        <div id="mgrContent" style="display: none; margin-top: 20px;">
+            <input type="hidden" id="mgrProjectId">
+            <input type="hidden" id="mgrYear">
+
+            <!-- Tabs -->
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid var(--border-color);">
+                <button class="btn-tab active" onclick="switchTab('log')">Log Meeting</button>
+                <button class="btn-tab" onclick="switchTab('settings')">Settings</button>
+            </div>
+
+            <!-- Tab: Settings -->
+            <div id="tabSettings" style="display: none;">
+                <label class="form-label">Recurrent Day</label>
+                <select id="mgrDay" class="btn" style="width: 100%; margin-bottom: 10px;">
+                    <option value="">Not Set</option>
+                    <option value="Mon">Monday</option>
+                    <option value="Tue">Tuesday</option>
+                    <option value="Wed">Wednesday</option>
+                    <option value="Thu">Thursday</option>
+                    <option value="Fri">Friday</option>
+                </select>
+
+                <label class="form-label">Time</label>
+                <input type="time" id="mgrTime" class="btn" style="width: 100%; margin-bottom: 15px;">
+
+                <button class="btn btn-primary" onclick="saveSettings()" style="width: 100%;">Save Schedule</button>
+            </div>
+
+            <!-- Tab: Log -->
+            <div id="tabLog">
+                <label class="form-label">Meeting Date (Log Date)</label>
+                <input type="date" id="mgrDate" class="btn" style="width: 100%; margin-bottom: 10px;"
+                    onchange="updateWeekInfo()">
+
+                <div
+                    style="background: rgba(255,255,255,0.05); padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                    <div id="weekInfo" style="font-size: 0.8em; color: var(--accent-cyan); font-weight: bold;">Week ?
+                    </div>
+                </div>
+
+                <label class="form-label">Actual Progress / Discussion (Updating Current Week)</label>
+                <textarea id="mgrActualDesc" class="btn" style="width: 100%; min-height: 80px; margin-bottom: 10px;"
+                    placeholder="What was completed? Minutes?"></textarea>
+
+                <div class="grid-2">
+                    <div>
+                        <label class="form-label">Hours</label>
+                        <input type="number" id="mgrHours" class="btn" style="width: 100%;" step="0.5" value="0">
+                    </div>
+                    <div>
+                        <label class="form-label">Progress %</label>
+                        <input type="number" id="mgrProgress" class="btn" style="width: 100%;" value="0">
+                    </div>
+                </div>
+
+                <label class="form-label" style="margin-top: 15px;">Next Actions / Plan (Updating Next Week)</label>
+                <textarea id="mgrNextPlan" class="btn" style="width: 100%; min-height: 80px; margin-bottom: 15px;"
+                    placeholder="Plan for the upcoming week..."></textarea>
+
+                <button class="btn btn-primary" onclick="saveLog()" style="width: 100%;">Save & Update Project</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .week-row {
+        margin-bottom: 10px;
+    }
+
+    .week-label {
+        font-size: 0.9em;
+        color: var(--accent-cyan);
+        margin-bottom: 5px;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 2px;
+    }
+
+    .week-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 2px;
+    }
+
+    .cal-column {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        min-height: 120px;
+    }
+
+    .cal-header {
+        text-align: center;
+        padding: 5px;
+        font-size: 0.8em;
+        background: rgba(255, 255, 255, 0.05);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .cal-header.today {
+        background: var(--accent-cyan);
+        color: #000;
+    }
+
+    .cal-body {
+        padding: 5px;
+        flex-grow: 1;
+    }
+
+    .cal-event {
+        background: rgba(0, 243, 255, 0.1);
+        border-left: 3px solid var(--accent-cyan);
+        padding: 4px 8px;
+        margin-bottom: 5px;
+        border-radius: 0 4px 4px 0;
+        font-size: 0.8em;
+        cursor: pointer;
+        transition: transform 0.2s;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .cal-event:hover {
+        transform: translateX(2px);
+        background: rgba(0, 243, 255, 0.2);
+        z-index: 10;
+        position: relative;
+        white-space: normal;
+    }
+
+    .btn-tab {
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        padding: 10px 15px;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+    }
+
+    .btn-tab.active {
+        color: var(--text-primary);
+        border-bottom: 2px solid var(--accent-cyan);
+    }
+
+    .form-label {
+        display: block;
+        font-size: 0.8em;
+        color: var(--text-secondary);
+        margin-bottom: 5px;
+    }
+</style>
+
+<script>
+    let allProjects = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadData();
+    });
+
+    async function loadData() {
+        try {
+            const res = await fetch('/api/projects/');
+            const data = await res.json();
+            // Filter out closed projects
+            const closedStatuses = ['Closed', 'Completed', 'Deployed', '结案', 'Done'];
+            allProjects = data.filter(p => !closedStatuses.includes(p.status));
+
+            renderCalendar();
+            renderList();
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function renderCalendar() {
+        const container = document.getElementById('calendarContainer');
+        container.innerHTML = '';
+
+        const curr = new Date();
+        // Calculate Monday of current week
+        const currentDay = curr.getDay(); // 0 (Sun) - 6 (Sat)
+        const distanceToMonday = (currentDay + 6) % 7;
+        const thisMonday = new Date(curr);
+        thisMonday.setDate(curr.getDate() - distanceToMonday);
+
+        const weeks = [
+            { label: 'Last Week', offset: -1 },
+            { label: 'This Week', offset: 0 },
+            { label: 'Next Week', offset: 1 }
+        ];
+
+        const daysMap = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
+
+        weeks.forEach(week => {
+            const weekStart = new Date(thisMonday);
+            weekStart.setDate(thisMonday.getDate() + (week.offset * 7));
+
+            // Row Container
+            const rowDiv = document.createElement('div');
+            rowDiv.className = 'week-row';
+
+            // Label
+            const labelTitle = week.offset === 0 ? "This Week" : (week.offset === -1 ? "Last Week" : "Next Week");
+
+            // Range String
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            const rangeStr = `${weekStart.toLocaleDateString()} - ${weekEnd.toLocaleDateString()}`;
+
+            rowDiv.innerHTML = `<div class="week-label">${labelTitle} <span style="font-size:0.8em; color:var(--text-secondary); margin-left:10px;">${rangeStr}</span></div>`;
+
+            // Grid
+            const gridDiv = document.createElement('div');
+            gridDiv.className = 'week-grid';
+
+            // 7 Days
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(weekStart);
+                d.setDate(weekStart.getDate() + i);
+
+                const dayName = daysMap[d.getDay()];
+                const dateStr = d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+                const isToday = d.toDateString() === curr.toDateString();
+
+                const col = document.createElement('div');
+                col.className = 'cal-column';
+                col.innerHTML = `
+                    <div class="cal-header ${isToday ? 'today' : ''}">
+                        <div style="font-weight:bold;">${dayName}</div>
+                        <div>${dateStr}</div>
+                    </div>
+                    <div class="cal-body"></div>
+                `;
+
+                // Populate events
+                allProjects.forEach(p => {
+                    if (p.meeting_day === dayName && p.meeting_time) {
+                        const bodyDiv = col.querySelector('.cal-body');
+                        const div = document.createElement('div');
+                        div.className = 'cal-event';
+                        div.innerHTML = `<strong>${p.meeting_time}</strong> ${p.name}`;
+                        div.onclick = () => openManager(p.id, d);
+                        bodyDiv.appendChild(div);
+                    }
+                });
+
+                gridDiv.appendChild(col);
+            }
+
+            rowDiv.appendChild(gridDiv);
+            container.appendChild(rowDiv);
+        });
+    }
+
+    function renderList() {
+        const tbody = document.getElementById('projectListBody');
+        tbody.innerHTML = '';
+
+        // Sort by meeting day/time
+        // Basic sort logic
+
+        allProjects.forEach(p => {
+            // Find "Current/Last" status
+            // We assume "Last Meeting" is based on Today's date logic or last filled actual
+            // For simplicity: Find the latest week with 'actual_description'
+            let lastDesc = '-';
+            let nextPlan = '-';
+
+            if (p.weekly_progress && p.weekly_progress.length > 0) {
+                // Sort weekly progress desc
+                const sorted = [...p.weekly_progress].sort((a, b) => b.week_number - a.week_number);
+                const lastActual = sorted.find(w => w.actual_description);
+                if (lastActual) {
+                    lastDesc = `Week ${lastActual.week_number}: ${lastActual.actual_description.substring(0, 30)}...`;
+                }
+
+                // Planned
+                // Simplistic: Use lastActual + 1 or just the latest planned
+                const currentWeekNum = getWeekNumber(new Date());
+                const plan = sorted.find(w => w.week_number === currentWeekNum + 1) || sorted.find(w => w.week_number === currentWeekNum);
+                if (plan && plan.planned_description) {
+                    nextPlan = `Week ${plan.week_number}: ${plan.planned_description.substring(0, 30)}...`;
+                }
+            }
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding: 10px;">${p.name}</td>
+                <td style="padding: 10px;">
+                    ${p.meeting_day ? p.meeting_day + ' ' + p.meeting_time : '<span style="color:var(--text-secondary)">Not Set</span>'}
+                </td>
+                <td style="padding: 10px; font-size: 0.8em; color: var(--text-secondary); max-width: 200px;">${lastDesc}</td>
+                <td style="padding: 10px; font-size: 0.8em; color: var(--text-secondary); max-width: 200px;">${nextPlan}</td>
+                <td style="padding: 10px; text-align: right;">
+                    <button class="btn" style="padding: 4px 10px; font-size: 0.8em;" onclick="openManager(${p.id})">Manage</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Manager View Logic
+    let currentProject = null;
+
+    function openManager(projectId, specificDate = null) {
+        currentProject = allProjects.find(p => p.id === projectId);
+        if (!currentProject) return;
+
+        document.getElementById('mgrContent').style.display = 'block';
+        document.getElementById('mgrTitle').innerText = currentProject.name;
+        document.getElementById('mgrProjectId').value = currentProject.id;
+        document.getElementById('mgrYear').value = currentProject.year;
+
+        // Populate Settings
+        document.getElementById('mgrDay').value = currentProject.meeting_day || '';
+        document.getElementById('mgrTime').value = currentProject.meeting_time || '';
+
+        // Setup Log Tab Default (Today or specific date)
+        const d = specificDate ? new Date(specificDate) : new Date();
+        document.getElementById('mgrDate').valueAsDate = d;
+        updateWeekInfo();
+
+        // Switch to default tab
+        switchTab('log');
+    }
+
+    function switchTab(tab) {
+        document.querySelectorAll('.btn-tab').forEach(b => b.classList.remove('active'));
+        document.querySelector(`.btn-tab[onclick="switchTab('${tab}')"]`).classList.add('active');
+
+        document.getElementById('tabSettings').style.display = tab === 'settings' ? 'block' : 'none';
+        document.getElementById('tabLog').style.display = tab === 'log' ? 'block' : 'none';
+    }
+
+    function getWeekNumber(d) {
+        d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+        var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        var weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        return weekNo;
+    }
+
+    function updateWeekInfo() {
+        const dateVal = document.getElementById('mgrDate').value;
+        if (!dateVal || !currentProject) return;
+
+        const date = new Date(dateVal);
+        const weekNum = getWeekNumber(date);
+
+        document.getElementById('weekInfo').innerText = `Target Week: ${weekNum} (Year ${date.getFullYear()})`;
+
+        // Try to pre-fill if data exists locally
+        // Find if we have data for this week
+        const existing = currentProject.weekly_progress.find(w => w.week_number === weekNum && w.year === date.getFullYear());
+        if (existing) {
+            document.getElementById('mgrActualDesc').value = existing.actual_description || '';
+            document.getElementById('mgrHours').value = existing.actual_hours || 0;
+            document.getElementById('mgrProgress').value = existing.actual_progress || 0;
+
+            // For Next Plan, we try to find Week + 1
+            const next = currentProject.weekly_progress.find(w => w.week_number === weekNum + 1 && w.year === date.getFullYear());
+            document.getElementById('mgrNextPlan').value = next ? (next.planned_description || '') : '';
+        } else {
+            document.getElementById('mgrActualDesc').value = '';
+            document.getElementById('mgrHours').value = 0;
+            document.getElementById('mgrProgress').value = 0;
+            document.getElementById('mgrNextPlan').value = '';
+        }
+    }
+
+    async function saveSettings() {
+        if (!currentProject) return;
+        const day = document.getElementById('mgrDay').value;
+        const time = document.getElementById('mgrTime').value;
+
+        try {
+            // Need to fetch full currentProject update to preserve other fields? 
+            // The API updates only passed fields usually if PATCH, but our PUT updates all by default in Pydantic Schema if not careful
+            // Actually our schemas.ProjectUpdate is partial? 
+            // PUT /api/projects/{id} uses ProjectCreate which has optional fields. 
+            // In projects.py: update_project iterates project.dict(), updating matches.
+            // Problem: project.dict() might contain None for fields we don't send?
+            // ProjectCreate defaults are None.
+            // Let's rely on exclude_unset logic in Pydantic v1 (or v2)?
+            // The schema in projects.py: `project.dict().items()` iterates ALL fields.
+            // CAUTION: This might overwrite existing data with None if we don't send it.
+            // SAFER APPROACH: Use a specific patch or send all data.
+            // Since we have `allProjects` loaded, we can construct the full object.
+
+            const body = {
+                ...currentProject,
+                meeting_day: day,
+                meeting_time: time
+            };
+            // Remove ID and relations to fit ProjectCreate schema
+            delete body.id;
+            delete body.weekly_progress;
+            delete body.lead_engineer;
+            delete body.updates;
+            delete body.logs;
+            delete body.maintenance_logs;
+
+            const res = await fetch(`/api/projects/${currentProject.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            if (res.ok) {
+                alert('Schedule Saved');
+                loadData(); // Reload
+            } else {
+                alert('Save failed');
+            }
+        } catch (e) { console.error(e); alert('Error saving settings'); }
+    }
+
+    async function saveLog() {
+        if (!currentProject) return;
+        const dateVal = document.getElementById('mgrDate').value;
+        const actualDesc = document.getElementById('mgrActualDesc').value;
+        const hours = document.getElementById('mgrHours').value;
+        const progress = document.getElementById('mgrProgress').value;
+        const nextPlan = document.getElementById('mgrNextPlan').value;
+
+        const date = new Date(dateVal);
+        const weekNum = getWeekNumber(date);
+        const year = date.getFullYear();
+
+        try {
+            // 1. Save Current Week Actual
+            const payload1 = {
+                week_number: weekNum,
+                year: year,
+                actual_description: actualDesc,
+                actual_hours: parseFloat(hours),
+                actual_progress: parseFloat(progress),
+                // We need to provide planned_progress to avoid validation error if it's new
+                // If existing, backend handles partial update? No, backend `create_weekly_progress` uses `exclude_unset=True` for update.
+                // But for create new, defaults handles it.
+            };
+
+            await fetch(`/api/projects/${currentProject.id}/weekly_progress`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload1)
+            });
+
+            // 2. Save Next Week Plan (if provided)
+            if (nextPlan && nextPlan.trim() !== '') {
+                // Endpoint for plan update expects a LIST
+                const payload2 = [{
+                    week_number: weekNum + 1,
+                    year: year,
+                    planned_description: nextPlan,
+                    planned_progress: 0 // Default
+                }];
+
+                await fetch(`/api/projects/${currentProject.id}/plan`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload2)
+                });
+            }
+
+            alert('Meeting Log Saved');
+            loadData();
+
+        } catch (e) { console.error(e); alert('Error saving log'); }
+    }
+</script>
+{% endblock %}

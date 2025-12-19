@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Engineer Workload Dashboard / 工作負荷看板</h2>
+
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <h3>Resource Allocation</h3>
+            <span style="color: var(--text-secondary); font-size: 0.9em;">(Analysis based on Weekly Hours / 40h)</span>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button onclick="debugDashboard()" class="btn"
+                style="border: 1px solid var(--accent-cyan); color: var(--accent-cyan); font-size: 0.8em;">Debug</button>
+
+            <select id="wYear" class="btn" onchange="renderCurrentView()">
+                <option value="2025">2025</option>
+                <option value="2024">2024</option>
+            </select>
+
+            <select id="wWeek" class="btn" onchange="renderCurrentView()">
+                <!-- Populated by JS -->
+            </select>
+        </div>
+    </div>
+
+    <div id="workloadContainer" style="display: flex; flex-direction: column; gap: 20px;">
+        <!-- Dynamic Content -->
+        <div style="text-align: center; padding: 50px;">Loading Workload Data...</div>
+    </div>
+</div>
+
+<script>
+    let GLOBAL_PROJECTS = [];
+    let GLOBAL_ENGINEERS = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        populateWeeks();
+        await fetchData();
+    });
+
+    function populateWeeks() {
+        const select = document.getElementById('wWeek');
+        select.innerHTML = '';
+
+        // Default to current week logic? For now just 1-52
+        // Find current week
+        const currentDate = new Date();
+        const startDate = new Date(currentDate.getFullYear(), 0, 1);
+        const days = Math.floor((currentDate - startDate) / (24 * 60 * 60 * 1000));
+        const currentToWeek = Math.ceil(days / 7);
+
+        for (let i = 1; i <= 52; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.text = `Week ${i}`;
+            if (i === currentToWeek) opt.selected = true;
+            select.appendChild(opt);
+        }
+    }
+
+    async function fetchData() {
+        try {
+            const [pRes, eRes] = await Promise.all([
+                fetch('/api/projects/'),
+                fetch('/api/projects/engineers')
+            ]);
+
+            if (!pRes.ok || !eRes.ok) throw new Error("API Error");
+
+            GLOBAL_PROJECTS = await pRes.json();
+            GLOBAL_ENGINEERS = await eRes.json();
+
+            renderCurrentView();
+
+        } catch (e) {
+            console.error(e);
+            document.getElementById('workloadContainer').innerHTML = `<div style="color:red; text-align:center;">Error loading data: ${e.message}</div>`;
+        }
+    }
+
+    function renderCurrentView() {
+        const container = document.getElementById('workloadContainer');
+        container.innerHTML = '';
+
+        const filterYear = parseInt(document.getElementById('wYear').value);
+        const filterWeek = parseInt(document.getElementById('wWeek').value);
+
+        // Pre-process: Map Engineer ID to their aggregated stats for this week
+        const engStats = new Map(); // { id: { totalHours: 0, activeItems: [], maintItems: [] } }
+
+        GLOBAL_ENGINEERS.forEach(eng => {
+            engStats.set(eng.id, {
+                engineer: eng,
+                totalHours: 0,
+                activeItems: [],
+                maintItems: []
+            });
+        });
+
+        const unassignedItems = [];
+
+        GLOBAL_PROJECTS.forEach(p => {
+            // Find assigned engineer ID
+            let engId = p.lead_engineer ? p.lead_engineer.id : null;
+            // Match via name if ID missing (legacy fix)
+            if (!engId && p.lead_engineer && p.lead_engineer.name) {
+                const match = GLOBAL_ENGINEERS.find(e => e.name === p.lead_engineer.name);
+                if (match) engId = match.id;
+            }
+
+            // 1. Calculate Active Work (WeeklyProgress)
+            if (p.weekly_progress) {
+                const wp = p.weekly_progress.find(w => w.year === filterYear && w.week_number === filterWeek);
+                if (wp && wp.actual_hours > 0) {
+                    const item = {
+                        projectName: p.name,
+                        desc: wp.actual_description || wp.planned_description || 'Work Logged',
+                        hours: wp.actual_hours,
+                        type: 'Active'
+                    };
+
+                    if (engId && engStats.has(engId)) {
+                        const stats = engStats.get(engId);
+                        stats.totalHours += wp.actual_hours;
+                        stats.activeItems.push(item);
+                    } else {
+                        unassignedItems.push(item);
+                    }
+                }
+            }
+
+            // 2. Calculate Maintenance Work (MaintenanceLogs)
+            if (p.maintenance_logs) {
+                p.maintenance_logs.forEach(log => {
+                    // Check date -> week conversion
+                    const logDate = new Date(log.log_date);
+                    // Simple week calc matches populateWeeks
+                    const startOfYear = new Date(filterYear, 0, 1);
+                    // Filter year first
+                    if (logDate.getFullYear() === filterYear) {
+                        const days = Math.floor((logDate - startOfYear) / (24 * 60 * 60 * 1000));
+                        const logWeek = Math.ceil((days + 1) / 7);
+
+                        if (logWeek === filterWeek) {
+                            const hours = log.hours_spent || 0; // Guard against null
+                            if (hours > 0) {
+                                const item = {
+                                    projectName: p.name,
+                                    desc: `[${log.log_type}] ${log.content}`,
+                                    hours: hours,
+                                    type: 'Maintenance'
+                                };
+
+                                if (engId && engStats.has(engId)) {
+                                    const stats = engStats.get(engId);
+                                    stats.totalHours += hours;
+                                    stats.maintItems.push(item);
+                                } else {
+                                    unassignedItems.push(item);
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+
+        // Render Cards
+        GLOBAL_ENGINEERS.forEach(eng => {
+            const stats = engStats.get(eng.id);
+            const loadPercent = Math.min((stats.totalHours / 40) * 100, 100);
+
+            // Determine Load Color
+            let barColor = 'var(--accent-cyan)';
+            if (loadPercent > 80) barColor = 'var(--accent-pink)'; // Overload
+            if (loadPercent < 20) barColor = 'var(--text-secondary)'; // Underload
+
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.style.background = 'rgba(255, 255, 255, 0.05)';
+            card.style.borderLeft = `4px solid ${barColor}`;
+
+            // Build Item Lists
+            const buildList = (items) => {
+                if (items.length === 0) return '<div style="color:grey; font-size:0.8em; padding:5px;">No activity logged.</div>';
+                return items.map(i => `
+                    <div style="display:flex; justify-content:space-between; padding:5px; background:rgba(0,0,0,0.2); margin-bottom:2px; border-radius:4px;">
+                        <span style="font-size:0.9em; color:#e6edf3;">
+                            <strong style="color:var(--accent-cyan)">${i.projectName}</strong>: ${i.desc}
+                        </span>
+                        <span style="font-size:0.9em; font-weight:bold; color:var(--text-primary); min-width:50px; text-align:right;">${i.hours}h</span>
+                    </div>
+                `).join('');
+            };
+
+            // Helper to build Maintenance Accordion
+            const buildMaintList = (items) => {
+                if (items.length === 0) return '<div style="color:grey; font-size:0.8em; padding:5px;">No activity logged.</div>';
+
+                // Group by Project
+                const groups = {};
+                items.forEach(i => {
+                    if (!groups[i.projectName]) groups[i.projectName] = { year: 2025, hours: 0, logs: [] };
+                    groups[i.projectName].hours += i.hours;
+                    groups[i.projectName].logs.push(i);
+                });
+
+                return Object.keys(groups).map((projName, idx) => {
+                    const g = groups[projName];
+                    const uniqueId = `maint-${eng.id}-${idx}`;
+                    return `
+                    <div style="background:rgba(0,0,0,0.2); margin-bottom:5px; border-radius:4px; overflow:hidden;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px; cursor:pointer;" 
+                             onclick="document.getElementById('${uniqueId}').style.display = document.getElementById('${uniqueId}').style.display === 'none' ? 'block' : 'none'">
+                             
+                            <div style="display:flex; align-items:center; gap:5px;">
+                                <span style="color:var(--accent-cyan); font-weight:bold;">${projName}</span>
+                                <span style="font-size:0.8em; color:var(--text-secondary);">(Total: ${g.hours}h)</span>
+                                <span style="color:var(--accent-cyan); font-weight:bold;">+</span>
+                            </div>
+                        </div>
+                        <div id="${uniqueId}" style="display:none; padding:5px 10px; border-top:1px solid rgba(255,255,255,0.05);">
+                            ${g.logs.map(log => `
+                                <div style="display:flex; justify-content:space-between; font-size:0.85em; margin-bottom:3px; color:#e6edf3;">
+                                    <span>${log.desc}</span>
+                                    <span style="opacity:0.8">${log.hours}h</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    `;
+                }).join('');
+            };
+
+            const activeHtml = buildList(stats.activeItems);
+            const maintHtml = buildMaintList(stats.maintItems);
+
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <div>
+                        <h4 style="margin: 0; font-size: 1.3em;">${eng.name}</h4>
+                        <div style="font-size: 0.8em; color: var(--text-secondary);">Week ${filterWeek} Total Load</div>
+                    </div>
+                    <div style="text-align: right; width: 150px;">
+                        <div style="font-size: 1.2em; font-weight: bold; color: ${barColor}">${stats.totalHours}h / 40h</div>
+                        <div style="background: rgba(255,255,255,0.1); height: 6px; border-radius: 3px; margin-top: 5px;">
+                            <div style="background: ${barColor}; width: ${loadPercent}%; height: 100%; border-radius: 3px;"></div>
+                        </div>
+                        <div style="font-size: 0.7em; color: ${barColor}">${Math.round((stats.totalHours / 40) * 100)}%</div>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div>
+                        <h5 style="color: var(--accent-purple); border-bottom: 1px solid var(--accent-purple); margin-bottom: 10px;">Development (開發中)</h5>
+                        ${activeHtml}
+                    </div>
+                    <div>
+                        <h5 style="color: var(--accent-cyan); border-bottom: 1px solid var(--accent-cyan); margin-bottom: 10px;">Maintenance (維運)</h5>
+                        ${maintHtml}
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+
+        // Unassigned Section
+        if (unassignedItems.length > 0) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.style.borderLeft = '4px solid red';
+            card.innerHTML = `
+                <h4 style="color:red">Unassigned Work Logs</h4>
+                <div style="margin-top:10px">
+                    ${unassignedItems.map(i => `
+                        <div style="display:flex; justify-content:space-between; padding:5px; background:rgba(255,0,0,0.1); margin-bottom:2px;">
+                            <span><strong>${i.projectName}</strong>: ${i.desc}</span>
+                            <span>${i.hours}h</span>
+                        </div>
+                    `).join('')}
+                </div>
+             `;
+            container.appendChild(card);
+        }
+    }
+
+    function debugDashboard() {
+        alert(`Debug:\nProjects: ${GLOBAL_PROJECTS.length}\nEngineers: ${GLOBAL_ENGINEERS.length}`);
+        console.log("Global Projects", GLOBAL_PROJECTS);
+    }
+</script>
+{% endblock %}

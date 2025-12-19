@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>總表看板</h2>
+
+<!-- Overview Stats (Simplified) -->
+<div class="card">
+    <h3>Project Statistics</h3>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr>
+                <th style="text-align: left; padding: 10px;">Category</th>
+                <th style="text-align: right; padding: 10px;">Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 10px;">Total Projects</td>
+                <td style="text-align: right; padding: 10px; font-weight: bold; color: var(--accent-cyan);"
+                    id="statTotal">-</td>
+            </tr>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 10px;">Active / Development</td>
+                <td style="text-align: right; padding: 10px; font-weight: bold; color: var(--accent-purple);"
+                    id="statActive">-</td>
+            </tr>
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 10px;">Planning</td>
+                <td style="text-align: right; padding: 10px;" id="statPlanning">-</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px;">Maintenance</td>
+                <td style="text-align: right; padding: 10px; color: #2ea043;" id="statMaint">-</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="grid-2" style="margin-top: 20px;">
+    <!-- Project List Summary -->
+    <div class="card">
+        <h3>Project Status Overview</h3>
+        <div style="max-height: 400px; overflow-y: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                        <th style="text-align: left; padding: 8px;">Project</th>
+                        <th style="padding: 8px;">Status</th>
+                        <th style="padding: 8px;">Progress</th>
+                    </tr>
+                </thead>
+                <tbody id="projectListBody">
+                    <tr>
+                        <td colspan="3" style="text-align:center; padding:20px;">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Engineer Workload Summary -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3>Engineer Workload (Current Week)</h3>
+            <div style="font-size: 0.8em; color: var(--text-secondary);">Capacity: 40h</div>
+        </div>
+        <div id="engineerLoadContainer" style="display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
+            <div style="text-align:center; padding:20px;">Loading...</div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const [pRes, eRes] = await Promise.all([
+                fetch('/api/projects/'),
+                fetch('/api/projects/engineers')
+            ]);
+
+            const projects = await pRes.json();
+            const engineers = await eRes.json();
+
+            renderStats(projects);
+            renderProjectList(projects);
+            renderEngineerLoad(projects, engineers);
+
+        } catch (e) {
+            console.error(e);
+            alert('Error loading dashboard data');
+        }
+    });
+
+    function renderStats(projects) {
+        let total = projects.length;
+        let planning = 0;
+        let active = 0;
+        let maint = 0;
+
+        projects.forEach(p => {
+            if (p.status === 'Planning') planning++;
+            else if (p.status === 'Maintenance' || p.status === 'Complete' || p.status === 'Deployed') maint++;
+            else active++;
+        });
+
+        document.getElementById('statTotal').innerText = total;
+        document.getElementById('statPlanning').innerText = planning;
+        document.getElementById('statActive').innerText = active;
+        document.getElementById('statMaint').innerText = maint;
+    }
+
+    function renderProjectList(projects) {
+        const tbody = document.getElementById('projectListBody');
+        tbody.innerHTML = '';
+
+        const sortOrder = { 'Development': 1, 'Testing': 2, 'Planning': 3, 'Maintenance': 4, 'Deployed': 4, 'Complete': 5 };
+        projects.sort((a, b) => (sortOrder[a.status] || 99) - (sortOrder[b.status] || 99));
+
+        projects.forEach(p => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+
+            let statusColor = '#e6edf3';
+            if (p.status === 'Development') statusColor = 'var(--accent-cyan)';
+            if (p.status === 'Maintenance' || p.status === 'Deployed') statusColor = '#2ea043';
+            if (p.status === 'Planning') statusColor = 'var(--text-secondary)';
+
+            tr.innerHTML = `
+                <td style="padding: 12px 8px;">
+                    <div style="font-weight: bold;">${p.name}</div>
+                    <div style="font-size: 0.8em; color: var(--text-secondary);">${p.lead_engineer ? p.lead_engineer.name : 'Unassigned'}</div>
+                </td>
+                <td style="padding: 12px 8px; color: ${statusColor}; font-size: 0.9em;">
+                    ${p.status}
+                </td>
+                <td style="padding: 12px 8px; width: 100px;">
+                    <div style="background: rgba(255,255,255,0.1); height: 6px; border-radius: 3px;">
+                        <div style="background: ${statusColor}; width: ${p.progress}%; height: 100%; border-radius: 3px;"></div>
+                    </div>
+                    <div style="font-size: 0.7em; text-align: right; margin-top: 3px; color: var(--text-secondary);">${p.progress}%</div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function renderEngineerLoad(projects, engineers) {
+        const container = document.getElementById('engineerLoadContainer');
+        container.innerHTML = '';
+
+        const today = new Date();
+        const startOfYear = new Date(today.getFullYear(), 0, 1);
+        const days = Math.floor((today - startOfYear) / (24 * 60 * 60 * 1000));
+        const currentWeek = Math.ceil((days + 1) / 7);
+
+        const loadMap = new Map();
+
+        projects.forEach(p => {
+            let engId = p.lead_engineer ? p.lead_engineer.id : null;
+            if (!engId && p.lead_engineer && p.lead_engineer.name) {
+                const match = engineers.find(e => e.name === p.lead_engineer.name);
+                if (match) engId = match.id;
+            }
+
+            if (!engId) return;
+
+            let hours = 0;
+            if (p.weekly_progress) {
+                const wp = p.weekly_progress.find(w => w.year === today.getFullYear() && w.week_number === currentWeek);
+                if (wp) hours += (wp.actual_hours || 0);
+            }
+            if (p.maintenance_logs) {
+                p.maintenance_logs.forEach(log => {
+                    const d = new Date(log.log_date);
+                    const logDays = Math.floor((d - startOfYear) / (24 * 60 * 60 * 1000));
+                    const logWeek = Math.ceil((logDays + 1) / 7);
+                    if (d.getFullYear() === today.getFullYear() && logWeek === currentWeek) {
+                        hours += (log.hours_spent || 0);
+                    }
+                });
+            }
+            loadMap.set(engId, (loadMap.get(engId) || 0) + hours);
+        });
+
+        engineers.forEach(eng => {
+            const hours = loadMap.get(eng.id) || 0;
+            const percent = Math.min((hours / 40) * 100, 100);
+
+            let color = 'var(--accent-cyan)';
+            if (percent > 80) color = 'var(--accent-pink)';
+
+            const div = document.createElement('div');
+            div.innerHTML = `
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span style="font-weight: bold;">${eng.name}</span>
+                    <span style="font-size: 0.9em; color: ${color};">${hours}h / 40h</span>
+                </div>
+                <!-- Removed transition effect -->
+                <div style="background: rgba(255,255,255,0.1); height: 8px; border-radius: 4px;">
+                    <div style="background: ${color}; width: ${percent}%; height: 100%; border-radius: 4px;"></div>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+</script>
+{% endblock %}

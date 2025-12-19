@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>匯入匯出 (Sync with LLM)</h2>
+<p style="color: var(--text-secondary); margin-bottom: 20px;">
+    此介面提供與 LLM (Large Language Model) 協作的 Markdown 介面。您可以將專案匯出給 LLM 進行分析或修改，再將結果匯入回系統。
+</p>
+
+<div class="grid-2">
+    <!-- Import Section -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3>Import Markdown</h3>
+            <button class="btn" onclick="downloadTemplate()" style="font-size: 0.8em;">Download Template</button>
+        </div>
+
+        <div
+            style="border: 2px dashed var(--border-color); padding: 40px; text-align: center; border-radius: 8px; margin-bottom: 20px;">
+            <input type="file" id="importFile" accept=".md,.txt" style="display: none;"
+                onchange="handleFileSelect(this)">
+            <button class="btn btn-primary" onclick="document.getElementById('importFile').click()">Select File</button>
+            <p id="fileName" style="margin-top: 10px; color: var(--text-secondary);">No file selected</p>
+        </div>
+
+        <button class="btn btn-primary" onclick="uploadFile()" style="width: 100%;">Import & Sync</button>
+
+        <div id="importLog"
+            style="margin-top: 20px; display: none; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 4px;">
+            <h4 style="color: var(--accent-cyan); margin-bottom: 5px;">Sync Result:</h4>
+            <div id="logContent" style="font-size: 0.9em; max-height: 200px; overflow-y: auto;"></div>
+        </div>
+    </div>
+
+    <!-- Export Section -->
+    <div class="card">
+        <h3>Export Projects</h3>
+        <p style="font-size: 0.8em; color: var(--text-secondary); margin-bottom: 10px;">Select projects to generate a
+            comprehensive Markdown report.</p>
+
+        <div style="margin-bottom: 10px;">
+            <button class="btn" onclick="selectAll()">Select All</button>
+            <button class="btn" onclick="deselectAll()">Clear</button>
+        </div>
+
+        <div
+            style="max-height: 400px; overflow-y: auto; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 4px; padding: 10px;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <tbody id="projectListBody">
+                    <!-- Dynamic -->
+                </tbody>
+            </table>
+        </div>
+
+        <button class="btn btn-primary" onclick="exportSelected()" style="width: 100%; margin-top: 20px;">Generate
+            Export Markdown</button>
+    </div>
+</div>
+
+<script>
+    let allProjects = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadProjects();
+    });
+
+    async function loadProjects() {
+        const res = await fetch('/api/projects/');
+        allProjects = await res.json();
+        const tbody = document.getElementById('projectListBody');
+        tbody.innerHTML = '';
+
+        allProjects.forEach(p => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="padding: 5px; width: 30px;"><input type="checkbox" class="proj-cb" value="${p.id}"></td>
+                <td style="padding: 5px;">${p.name}</td>
+                <td style="padding: 5px; font-size: 0.8em; color: var(--text-secondary);">${p.status}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function handleFileSelect(input) {
+        const name = input.files[0] ? input.files[0].name : 'No file selected';
+        document.getElementById('fileName').innerText = name;
+    }
+
+    async function downloadTemplate() {
+        const res = await fetch('/api/sync/template');
+        const data = await res.json();
+        downloadString(data.content, "template.md");
+    }
+
+    async function uploadFile() {
+        const input = document.getElementById('importFile');
+        if (!input.files[0]) return alert("Please select a file first");
+
+        const formData = new FormData();
+        formData.append("file", input.files[0]);
+
+        try {
+            const res = await fetch('/api/sync/import', { method: 'POST', body: formData });
+            const result = await res.json();
+
+            document.getElementById('importLog').style.display = 'block';
+            if (res.ok) {
+                document.getElementById('logContent').innerHTML = result.logs.map(l => `<div>✔ ${l}</div>`).join('');
+                alert("Import Successful!");
+                loadProjects(); // Refresh list to see new projects if any
+            } else {
+                document.getElementById('logContent').innerHTML = `<div style="color: var(--accent-pink);">Error: ${result.detail}</div>`;
+            }
+        } catch (e) { console.error(e); alert("Import Failed"); }
+    }
+
+    function selectAll() {
+        document.querySelectorAll('.proj-cb').forEach(cb => cb.checked = true);
+    }
+
+    function deselectAll() {
+        document.querySelectorAll('.proj-cb').forEach(cb => cb.checked = false);
+    }
+
+    async function exportSelected() {
+        const selected = Array.from(document.querySelectorAll('.proj-cb:checked')).map(cb => parseInt(cb.value));
+        if (selected.length === 0) return alert("Select at least one project");
+
+        try {
+            const res = await fetch('/api/sync/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(selected)
+            });
+            const data = await res.json();
+            downloadString(data.content, "export_projects.md");
+        } catch (e) { console.error(e); alert("Export Failed"); }
+    }
+
+    function downloadString(text, filename) {
+        const blob = new Blob([text], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+</script>
+{% endblock %}

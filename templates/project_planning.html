@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+            <h2>Project Planning: {{ project.name }}</h2>
+            <div style="color: var(--text-secondary);">Define the expected progress for each week.</div>
+        </div>
+        <div style="gap: 10px; display: flex;">
+            <button class="btn" onclick="autoDistribute()">Auto Distribute (100%)</button>
+            <button class="btn btn-primary" onclick="savePlan()">Save Plan</button>
+        </div>
+    </div>
+
+    <div style="max-height: 70vh; overflow-y: auto;">
+        <table id="planningTable">
+            <thead>
+                <tr>
+                    <th>Week #</th>
+                    <th>Planned Progress (%)</th>
+                    <th>Planned Description (Notes)</th>
+                    <!-- <th>Diff Preview</th> -->
+                </tr>
+            </thead>
+            <tbody>
+                {% for week in weekly_data %}
+                <tr data-week="{{ week.week_number }}" data-year="{{ week.year }}">
+                    <td>Week {{ week.week_number }}</td>
+                    <td>
+                        <input type="number" class="plan-input btn" style="width: 100px; text-align: right;"
+                            value="{{ week.planned_progress }}" min="0" max="100"> %
+                    </td>
+                    <td>
+                        <input type="text" class="plan-desc-input btn" style="width: 100%; text-align: left;"
+                            value="{{ week.planned_description or '' }}" placeholder="e.g. Kickoff meeting">
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const projectId = {{ project.id }};
+
+    // Helper to auto-calculate linear distribution
+    function autoDistribute() {
+        const rows = document.querySelectorAll('#planningTable tbody tr');
+        const count = rows.length;
+        if (count === 0) return;
+
+        const base = Math.floor(100 / count);
+        const remainder = 100 % count;
+
+        rows.forEach((row, index) => {
+            const input = row.querySelector('.plan-input');
+            let val = base;
+            if (index === count - 1) {
+                val += remainder;
+            }
+            input.value = val;
+        });
+    }
+
+    async function savePlan() {
+        const rows = document.querySelectorAll('#planningTable tbody tr');
+        const payload = [];
+
+        rows.forEach(row => {
+            const week = parseInt(row.getAttribute('data-week'));
+            const year = parseInt(row.getAttribute('data-year'));
+            const planned = parseInt(row.querySelector('.plan-input').value) || 0;
+            const description = row.querySelector('.plan-desc-input').value;
+
+            payload.push({
+                week_number: week,
+                year: year,
+                planned_progress: planned,
+                planned_description: description,
+                actual_progress: 0 // Keep as is in backend logic mostly
+            });
+        });
+
+        try {
+            const response = await fetch(`/api/projects/${projectId}/plan`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                window.location.href = `/projects/${projectId}`;
+            } else {
+                alert('Failed to save plan');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error saving plan');
+        }
+    }
+</script>
+{% endblock %}

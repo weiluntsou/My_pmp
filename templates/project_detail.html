@@ -1,0 +1,560 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="margin-bottom: 20px;">
+    <a href="/cft_projects" class="btn">← 專案列表</a>
+</div>
+
+<div class="card tech-border">
+    <div style="display: flex; justify-content: space-between; align-items: start;">
+        <div>
+            <h2 style="margin: 0; color: var(--accent-cyan);">{{ project.name }}</h2>
+            <div style="color: var(--text-secondary); margin-top: 5px;">{{ project.cft_unit }} | {{ project.year }}
+            </div>
+        </div>
+        <div style="text-align: right;">
+            <div style="font-size: 2em; font-weight: bold; color: var(--accent-purple);">{{ project.progress }}%</div>
+            <div style="font-size: 0.8em; color: var(--text-secondary);">States: <span id="projectStatus">{{
+                    project.status }}</span></div>
+            {% if project.status != 'Maintenance' and project.status != 'Deployed' %}
+            <div style="display: flex; gap: 5px; justify-content: flex-end; margin-top: 10px;">
+                <a href="/projects/{{ project.id }}/planning" class="btn"
+                    style="display: inline-block; padding: 4px 10px; font-size: 0.8em;">編輯週計畫</a>
+                <button onclick="openCloseModal()" class="btn"
+                    style="padding: 4px 10px; font-size: 0.8em; color: var(--accent-cyan); border-color: var(--accent-cyan);">Close
+                    Project / 結案</button>
+            </div>
+            {% else %}
+            <div style="margin-top: 10px; font-size: 0.9em; color: var(--text-secondary);">
+                {% if project.closure_date %}Closed: {{ project.closure_date }}{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <p style="margin-top: 20px; color: var(--text-primary);">{{ project.description or 'No description provided.' }}</p>
+</div>
+
+<!-- Weekly Progress / Gantt Chart -->
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3>Schedule Progress</h3>
+    </div>
+    <div style="width: 100%; overflow-x: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;">
+        <div id="ganttContainer" style="min-width: 800px; position: relative;">
+            <!-- Gantt rendered by JS -->
+        </div>
+    </div>
+</div>
+
+<!-- Add Progress Modal -->
+<div id="progressModal"
+    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 100; justify-content: center; align-items: center;">
+    <div class="card" style="width: 400px; max-width: 90%;">
+        <h3>Update Weekly Progress</h3>
+        <form id="progressForm" onsubmit="submitProgress(event)">
+            <div class="grid-2" style="margin-bottom: 15px;">
+                <input type="number" name="year" id="pYear" value="2025" placeholder="Year">
+                <input type="number" name="week" id="pWeek" placeholder="Week #" required readonly>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="color:var(--accent-purple);">Planned Description</label>
+                <input type="text" id="pPlannedDesc" placeholder="Kickoff..." class="btn"
+                    style="width:100%; margin-top:5px; text-align:left;" readonly>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="color:var(--accent-cyan);">Actual Description (Reporting)</label>
+                <textarea id="pActualDesc" placeholder="Enter actual progress details here involved..." class="btn"
+                    style="width:100%; min-height:80px; margin-top:5px; text-align:left;"></textarea>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="color:var(--accent-pink);">Time Spent (Hours)</label>
+                <input type="number" id="pActualHours" placeholder="e.g 8.5" class="btn" step="0.5"
+                    style="width:100%; margin-top:5px; text-align:left;">
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="btn" onclick="closeProgressModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Maintenance Logs Section (Visible only if Maintenance or Deployed) -->
+{% if project.status == 'Maintenance' or project.status == 'Deployed' %}
+<div class="card" style="margin-top: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3>Maintenance Log / 維運記錄</h3>
+        <button class="btn btn-primary" onclick="openMaintenanceModal()">+ Add Log</button>
+    </div>
+
+    <div style="margin-top: 15px; max-height: 400px; overflow-y: auto;">
+        {% if project.maintenance_logs %}
+        <table style="width: 100%;">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Content</th>
+                    <th>Hours</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in project.maintenance_logs %}
+                <tr>
+                    <td>{{ log.log_date }}</td>
+                    <td>
+                        <span
+                            style="color: {% if log.log_type == 'Incident' %}var(--accent-pink){% else %}var(--accent-cyan){% endif %}">
+                            {{ log.log_type }}
+                        </span>
+                    </td>
+                    <td>{{ log.content }}</td>
+                    <td>{{ log.hours_spent }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="text-align: center; color: var(--text-secondary);">No maintenance logs yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Close Project Modal -->
+<div id="closeProjectModal"
+    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 200; justify-content: center; align-items: center;">
+    <div class="card" style="width: 400px;">
+        <h3>Close Project / 專案結案</h3>
+        <p>Please enter the closure meeting date to proceed.</p>
+        <form onsubmit="submitCloseProject(event)">
+            <input type="date" id="closeDate" class="btn" style="width: 100%; text-align: left; margin-bottom: 20px;"
+                required>
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="btn"
+                    onclick="document.getElementById('closeProjectModal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-primary">Close Project</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Add Maintenance Log Modal -->
+<div id="maintenanceModal"
+    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 200; justify-content: center; align-items: center;">
+    <div class="card" style="width: 400px;">
+        <h3>New Maintenance Log</h3>
+        <form onsubmit="submitMaintenanceLog(event)">
+            <div class="grid-2">
+                <input type="date" id="mDate" class="btn" style="width: 100%; margin-bottom: 10px;" required>
+                <select id="mType" class="btn" style="width: 100%; margin-bottom: 10px;" required>
+                    <option value="Routine">Regular/Routine (定期維運)</option>
+                    <option value="Incident">Incident/Error (突發異常)</option>
+                </select>
+            </div>
+            <div style="margin-bottom: 10px;">
+                <input type="number" id="mHours" class="btn" style="width: 100%; text-align: left;"
+                    placeholder="Hours Spent (e.g. 2.0)" step="0.5" required>
+            </div>
+            <textarea id="mContent" class="btn" style="width: 100%; min-height: 100px; text-align: left;"
+                placeholder="Content..." required></textarea>
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+                <button type="button" class="btn"
+                    onclick="document.getElementById('maintenanceModal').style.display='none'">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Log</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Project History Log -->
+<div class="card" style="margin-top: 20px;">
+    <h3>{{ project.name }} : Project History</h3>
+    <div style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;">
+        {% for log in project.logs %}
+        <div style="border-left: 2px solid var(--accent-cyan); padding-left: 10px;">
+            <div style="font-size: 0.8em; color: var(--text-secondary);">{{ log.created_at.strftime('%Y-%m-%d
+                %H:%M') }}
+            </div>
+            <div style="color: var(--text-primary);">{{ log.content }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const projectId = {{ project.id }};
+    const weeklyData = {{ weekly_data | tojson }};
+
+    // Prepare Chart Data
+    const labels = weeklyData.map(d => `Week ${d.week_number}`);
+    const plannedData = weeklyData.map(d => d.planned_progress);
+    const actualData = weeklyData.map(d => d.actual_progress);
+
+    // Custom Gantt Chart Logic
+    document.addEventListener('DOMContentLoaded', renderGantt);
+
+    function renderGantt() {
+        const container = document.getElementById('ganttContainer');
+        if (!container) return;
+
+        container.innerHTML = ''; // Clear
+
+        // --- 0. Data Cleanup (Handle potentially duplicate weeks from backend) ---
+        // Keep the record with highest ID (assuming later = newer)
+        const uniqueMap = new Map();
+        weeklyData.forEach(item => {
+            const key = `${item.year}-${item.week_number}`;
+            if (!uniqueMap.has(key) || item.id > uniqueMap.get(key).id) {
+                uniqueMap.set(key, item);
+            }
+        });
+        const cleanData = Array.from(uniqueMap.values()).sort((a, b) => a.week_number - b.week_number);
+
+        // --- 1. Dynamic Settings ---
+        const containerWidth = container.offsetWidth - 20; // Subtract padding
+        const startDate = new Date("{{ project.start_date }}" || "2025-01-01");
+
+        const maxWeek = Math.max(...cleanData.map(d => d.week_number), 12);
+        const totalWeeks = maxWeek;
+        const weekWidth = Math.floor((containerWidth - 100) / totalWeeks); // 100 for Label
+
+        // --- 2. Timeline Header ---
+        const header = document.createElement('div');
+        header.style.display = 'flex';
+        header.style.borderBottom = '1px solid #30363d';
+        header.style.marginBottom = '10px';
+        header.style.paddingLeft = '100px'; // Space for row labels
+        header.style.position = 'sticky';
+        header.style.top = '0';
+        header.style.background = '#0d1117';
+        header.style.zIndex = '10';
+
+        for (let i = 0; i < totalWeeks; i++) {
+            const weekDiv = document.createElement('div');
+            weekDiv.style.flex = `0 0 ${weekWidth}px`;
+            weekDiv.style.borderRight = '1px solid #30363d';
+            weekDiv.style.padding = '5px 0';
+            weekDiv.style.fontSize = '0.7em';
+            weekDiv.style.textAlign = 'center';
+            weekDiv.style.color = '#8b949e';
+            weekDiv.style.overflow = 'hidden';
+
+            // Calculate date
+            const d = new Date(startDate);
+            d.setDate(d.getDate() + (i * 7));
+            weekDiv.innerText = `${d.getMonth() + 1}/${d.getDate()}`;
+
+            header.appendChild(weekDiv);
+        }
+        container.appendChild(header);
+
+        // --- 3. Group by Task (Waterfall Logic) ---
+        // A "Task" is a contiguous block of planned_description
+        const tasks = [];
+        let currentTask = null;
+
+        cleanData.forEach(w => {
+            const planDesc = w.planned_description || 'Unspecified Work';
+            const actDesc = w.actual_description || '';
+
+            // Group if BOTH Planned and Actual descriptions match the current task
+            if (currentTask &&
+                currentTask.name === planDesc &&
+                currentTask.actualName === actDesc) {
+
+                currentTask.weeks.push(w);
+                currentTask.end = w.week_number;
+            } else {
+                if (currentTask) tasks.push(currentTask);
+                currentTask = {
+                    name: planDesc,
+                    actualName: actDesc,
+                    start: w.week_number,
+                    end: w.week_number,
+                    weeks: [w]
+                };
+            }
+        });
+        if (currentTask) tasks.push(currentTask);
+
+        // --- 4. Render Rows ---
+        tasks.forEach(task => {
+            const row = document.createElement('div');
+            row.style.height = '60px'; // Height for pair of bars
+            row.style.display = 'flex';
+            row.style.borderBottom = '1px solid rgba(48, 54, 61, 0.3)';
+            row.style.alignItems = 'center';
+            row.style.position = 'relative';
+
+            // Task Label
+            const label = document.createElement('div');
+            label.style.width = '100px';
+            label.style.flexShrink = '0';
+            label.style.padding = '0 10px';
+            label.style.fontSize = '0.8em';
+            label.style.color = '#e6edf3';
+            label.style.fontWeight = 'bold';
+            label.style.whiteSpace = 'nowrap';
+            label.style.overflow = 'hidden';
+            label.style.textOverflow = 'ellipsis';
+            label.innerText = task.name;
+            label.title = task.name;
+            row.appendChild(label);
+
+            // Track
+            const track = document.createElement('div');
+            track.style.flexGrow = '1';
+            track.style.height = '100%';
+            track.style.position = 'relative';
+            track.style.borderLeft = '1px solid #30363d';
+
+            // Grid Lines
+            for (let i = 0; i < totalWeeks; i++) {
+                const line = document.createElement('div');
+                line.style.position = 'absolute';
+                line.style.left = `${i * weekWidth}px`;
+                line.style.width = '1px';
+                line.style.height = '100%';
+                line.style.background = '#30363d';
+                line.style.opacity = '0.3';
+                track.appendChild(line);
+            }
+
+            // Render Bars
+
+            // 1. Planned Bar (Merged for the task)
+            const pStart = (task.start - 1) * weekWidth;
+            const pWidth = (task.end - task.start + 1) * weekWidth;
+
+            const plannedBar = document.createElement('div');
+            plannedBar.style.position = 'absolute';
+            plannedBar.style.left = `${pStart}px`;
+            plannedBar.style.width = `${pWidth - 4}px`;
+            plannedBar.style.top = '5px';
+            plannedBar.style.height = '22px';
+            plannedBar.style.background = '#bc13fe';
+            plannedBar.style.borderRadius = '4px';
+            plannedBar.style.opacity = '0.8';
+            plannedBar.style.fontSize = '0.7em';
+            plannedBar.style.color = '#fff';
+            plannedBar.style.display = 'flex';
+            plannedBar.style.alignItems = 'center';
+            plannedBar.style.paddingLeft = '5px';
+            plannedBar.style.overflow = 'hidden';
+            plannedBar.style.whiteSpace = 'nowrap';
+            plannedBar.style.textOverflow = 'ellipsis';
+            // Display Task Name in Bar (as requested)
+            plannedBar.innerHTML = `<span style="margin-right:5px; font-weight:bold;">${task.name}</span>`;
+
+            // Click Handler (Smart Select)
+            plannedBar.onclick = (e) => handleBarClick(e, task, pStart, weekWidth, 'planned');
+            plannedBar.style.cursor = 'pointer';
+            track.appendChild(plannedBar);
+
+            // 2. Actual Bars (Per week, to show variance)
+            // Or merged if same description? User asked for "same name connected".
+            // Let's grouping actuals similarly *within* this task timeframe
+
+            task.weeks.forEach(w => {
+                const aStart = (w.week_number - 1) * weekWidth;
+                const aWidth = weekWidth - 4;
+                const hasProgress = w.actual_description && w.actual_description.length > 0;
+
+                const actualBar = document.createElement('div');
+                actualBar.style.position = 'absolute';
+                actualBar.style.left = `${aStart}px`;
+                actualBar.style.width = `${aWidth}px`;
+                actualBar.style.top = '30px';
+                actualBar.style.height = '22px';
+                actualBar.style.background = hasProgress ? '#00f3ff' : 'transparent';
+                actualBar.style.border = hasProgress ? 'none' : '1px dashed #00f3ff';
+                actualBar.style.borderRadius = '4px';
+                actualBar.style.opacity = '0.7'; // Increased opacity for readability
+                actualBar.style.cursor = 'pointer';
+                actualBar.style.overflow = 'hidden';
+                actualBar.style.whiteSpace = 'nowrap';
+                actualBar.style.textOverflow = 'ellipsis';
+                actualBar.style.color = '#000'; // Dark text for contrast against blue
+                actualBar.style.fontWeight = 'bold';
+                actualBar.style.fontSize = '0.7em';
+                actualBar.style.display = 'flex';
+                actualBar.style.alignItems = 'center';
+                actualBar.style.paddingLeft = '5px';
+
+                actualBar.title = `Actual: ${w.actual_description || ''}`;
+
+                // Display Description
+                if (w.actual_description) {
+                    actualBar.innerText = w.actual_description;
+                }
+
+                // If merged view is preferred for actuals too, we'd need another grouping loop.
+                // For now, per-week actuals under the unified plan bar is very "Gantt-like" for tracking.
+
+                actualBar.onclick = () => openProgressModal(w, 'actual');
+                track.appendChild(actualBar);
+            });
+
+            row.appendChild(track);
+            row.appendChild(track);
+            container.appendChild(row);
+        });
+
+        // --- 5. Auto-Scroll to Current Date or Start ---
+        setTimeout(() => {
+            const today = new Date();
+            // Calculate week diff from start
+            const diffTime = Math.abs(today - startDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const currentWeekIdx = Math.floor(diffDays / 7);
+
+            if (currentWeekIdx > 0 && currentWeekIdx < totalWeeks) {
+                // Scroll to current week centered
+                const scrollPos = (currentWeekIdx * weekWidth) - (containerWidth / 2) + (weekWidth / 2);
+                container.parentElement.scrollLeft = Math.max(0, scrollPos);
+            } else {
+                // Scroll to first task start if today is out of range
+                if (tasks.length > 0) {
+                    const firstTaskStart = Math.min(...tasks.map(t => t.start));
+                    const scrollPos = ((firstTaskStart - 1) * weekWidth) - 50;
+                    container.parentElement.scrollLeft = Math.max(0, scrollPos);
+                }
+            }
+        }, 100);
+    }
+
+    function handleBarClick(e, task, xStart, wWidth, type) {
+        // Calculate relative click inside the bar
+        const rect = e.target.closest('div').getBoundingClientRect();
+        // Adjust for potential padding/margins of parent if needed, but getBoundingClientRect is absolute viewport
+        // Actually, we can just use the index within the task array
+        // But the bar is merged.
+
+        const clickX = e.clientX - rect.left;
+        const index = Math.floor(clickX / wWidth);
+        const w = task.weeks[index];
+        if (w) openProgressModal(w, type);
+    }
+
+    function openProgressModal(data = null, type = 'planned') {
+        const modal = document.getElementById('progressModal');
+        modal.style.display = 'flex';
+
+        // Auto-fill form if data is provided
+        if (data) {
+            document.getElementById('pYear').value = data.year;
+            document.getElementById('pWeek').value = data.week_number;
+            // document.getElementById('pPlanned').value = data.planned_progress; // Removed
+            // document.getElementById('pActual').value = data.actual_progress; // Removed
+
+            // Add description fields to the modal dynamically or update existing ones?
+            // User asked to edit "week description". The modal currently only has progress %.
+            // We need to add description inputs to the modal structure first.
+            const pDescInput = document.getElementById('pPlannedDesc');
+            const aDescInput = document.getElementById('pActualDesc');
+            if (pDescInput) pDescInput.value = data.planned_description || '';
+            if (aDescInput) aDescInput.value = data.actual_description || '';
+        } else {
+            // Defaults for fresh entry
+            const today = new Date();
+            document.getElementById('pYear').value = today.getFullYear();
+            document.getElementById('pWeek').value = '';
+            // document.getElementById('pPlanned').value = ''; // Removed
+            // document.getElementById('pActual').value = ''; // Removed
+            document.getElementById('pPlannedDesc').value = '';
+            document.getElementById('pPlannedDesc').value = '';
+            document.getElementById('pActualDesc').value = '';
+            document.getElementById('pActualHours').value = '';
+        }
+        // Auto-fill hours if exists (need to ensure data passed has it)
+        if (data && data.actual_hours) {
+            document.getElementById('pActualHours').value = data.actual_hours;
+        }
+    }
+
+    function closeProgressModal() {
+        document.getElementById('progressModal').style.display = 'none';
+    }
+
+    async function submitProgress(e) {
+        e.preventDefault();
+        const year = document.getElementById('pYear').value;
+        const week = document.getElementById('pWeek').value;
+        const plannedDesc = document.getElementById('pPlannedDesc').value;
+        const actualDesc = document.getElementById('pActualDesc').value;
+
+        try {
+            const response = await fetch(`/api/projects/${projectId}/weekly_progress`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    year: parseInt(year),
+                    week_number: parseInt(week),
+                    planned_description: plannedDesc,
+                    actual_description: actualDesc,
+                    actual_hours: parseFloat(document.getElementById('pActualHours').value || 0)
+                })
+            });
+
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Failed to update progress');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Error updating progress');
+        }
+    }
+
+    // --- New Functions for Close / Maintenance ---
+
+    function openCloseModal() {
+        document.getElementById('closeProjectModal').style.display = 'flex';
+        document.getElementById('closeDate').valueAsDate = new Date();
+    }
+
+    async function submitCloseProject(e) {
+        e.preventDefault();
+        const date = document.getElementById('closeDate').value;
+        try {
+            const res = await fetch(`/api/projects/${projectId}/close?closure_date=${date}`, { method: 'POST' });
+            if (res.ok) {
+                location.reload();
+            } else {
+                alert('Failed to close project');
+            }
+        } catch (e) { console.error(e); alert('Error'); }
+    }
+
+    function openMaintenanceModal() {
+        document.getElementById('maintenanceModal').style.display = 'flex';
+        document.getElementById('mDate').valueAsDate = new Date();
+    }
+
+    async function submitMaintenanceLog(e) {
+        e.preventDefault();
+        try {
+            const body = {
+                log_date: document.getElementById('mDate').value,
+                log_type: document.getElementById('mType').value,
+                content: document.getElementById('mContent').value,
+                hours_spent: parseFloat(document.getElementById('mHours').value || 0)
+            };
+            const res = await fetch(`/api/projects/${projectId}/maintenance`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (res.ok) location.reload();
+            else alert('Failed');
+        } catch (e) { alert('Error'); }
+    }
+</script>
+{% endblock %}

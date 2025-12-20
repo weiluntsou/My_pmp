@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Regular Reports / 定期報告</h2>
+
+<div class="card">
+    <div class="grid-3" style="align-items: end; gap: 20px;">
+        <div>
+            <label>Report Type</label>
+            <select id="rType" class="btn" style="width: 100%; text-align: left;" onchange="updateInputs()">
+                <option value="weekly">Weekly Report (週報)</option>
+                <option value="monthly">Monthly Report (月報)</option>
+                <option value="spring_keynote">Spring Keynote (春季發表會)</option>
+                <option value="autumn_keynote">Autumn Keynote (秋季發表會)</option>
+            </select>
+        </div>
+        <div>
+            <label>Year</label>
+            <input type="number" id="rYear" class="btn" value="2025" style="width: 100%;">
+        </div>
+        <div>
+            <div id="periodContainer">
+                <label id="periodLabel">Week Number</label>
+                <input type="number" id="rPeriod" class="btn" value="1" style="width: 100%;">
+            </div>
+        </div>
+    </div>
+    <div style="margin-top: 20px; text-align: right;">
+        <button class="btn btn-primary" onclick="generateReport()">Generate Report</button>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h3>Report Preview</h3>
+        <button class="btn" onclick="copyToClipboard()">Copy to Clipboard</button>
+    </div>
+    <textarea id="previewArea" class="btn" style="width: 100%; min-height: 400px; text-align: left;"
+        readonly></textarea>
+</div>
+
+<script>
+    function updateInputs() {
+        const type = document.getElementById('rType').value;
+        const pContainer = document.getElementById('periodContainer');
+        const pLabel = document.getElementById('periodLabel');
+        const pInput = document.getElementById('rPeriod');
+
+        if (type === 'weekly') {
+            pContainer.style.display = 'block';
+            pLabel.innerText = "Week Number";
+            pInput.type = "number";
+            // Default to current week logic could be added here
+        } else if (type === 'monthly') {
+            pContainer.style.display = 'block';
+            pLabel.innerText = "Month (1-12)";
+            pInput.type = "number";
+        } else {
+            // Keynotes don't need period
+            pContainer.style.display = 'none';
+        }
+    }
+
+    async function generateReport() {
+        const type = document.getElementById('rType').value;
+        const year = document.getElementById('rYear').value;
+        const period = document.getElementById('rPeriod').value;
+
+        try {
+            const res = await fetch(`/api/reports/generate?type=${type}&year=${year}&period=${period}`);
+            const data = await res.json();
+            if (res.ok) {
+                document.getElementById('previewArea').value = data.content;
+            } else {
+                alert("Error generating report");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Error");
+        }
+    }
+
+    function copyToClipboard() {
+        const copyText = document.getElementById("previewArea");
+        copyText.select();
+        copyText.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(copyText.value);
+        alert("Copied to clipboard");
+    }
+
+    // Init
+    const today = new Date();
+    // Simple week calc
+    const startOfYear = new Date(today.getFullYear(), 0, 1);
+    const day = Math.floor((today - startOfYear) / (24 * 60 * 60 * 1000));
+    const week = Math.ceil((today.getDay() + 1 + day) / 7);
+    document.getElementById('rPeriod').value = week;
+    updateInputs();
+</script>
+{% endblock %}

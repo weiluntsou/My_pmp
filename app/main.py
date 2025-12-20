@@ -3,7 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
-from app.routers import projects, meetings, sync
+from app.routers import projects, meetings, sync, reports
 from app.database import engine, Base, get_db
 from app import models
 
@@ -22,6 +22,7 @@ templates = Jinja2Templates(directory="templates")
 app.include_router(projects.router)
 app.include_router(meetings.router)
 app.include_router(sync.router)
+app.include_router(reports.router)
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
@@ -36,8 +37,12 @@ async def meetings_log(request: Request):
     return templates.TemplateResponse("meetings.html", {"request": request, "page_title": "會議規劃及紀錄"})
 
 @app.get("/import_export", response_class=HTMLResponse)
-async def import_export_page(request: Request):
-    return templates.TemplateResponse("import_export.html", {"request": request, "page_title": "匯入匯出"})
+async def read_import_export(request: Request):
+    return templates.TemplateResponse("import_export.html", {"request": request})
+
+@app.get("/reports", response_class=HTMLResponse)
+async def read_reports(request: Request):
+    return templates.TemplateResponse("reports.html", {"request": request, "page_title": "匯入匯出"})
 
 @app.get("/projects/{project_id}", response_class=HTMLResponse)
 async def project_detail(request: Request, project_id: int, db: Session = Depends(get_db)):

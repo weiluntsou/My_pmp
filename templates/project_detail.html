@@ -38,6 +38,8 @@
 <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h3>Schedule Progress</h3>
+        <button class="btn" style="border: 1px solid var(--accent-purple); color: var(--accent-purple);"
+            onclick="addNextWeek()">+ Add Week</button>
     </div>
     <div style="width: 100%; overflow-x: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;">
         <div id="ganttContainer" style="min-width: 800px; position: relative;">
@@ -555,6 +557,26 @@
             if (res.ok) location.reload();
             else alert('Failed');
         } catch (e) { alert('Error'); }
+    }
+
+    function addNextWeek() {
+        // Find max week currently in data or Gantt
+        let maxW = 0;
+        if (weeklyData && weeklyData.length > 0) {
+            maxW = Math.max(...weeklyData.map(d => d.week_number));
+        } else {
+            maxW = {{ project.duration_weeks or 12 }
+        };
+    }
+
+    // Open modal for next week
+    openProgressModal({
+        year: {{ project.year }},
+        week_number: maxW + 1,
+        planned_description: '',
+        actual_description: '',
+        actual_hours: 0
+        }, 'actual'); // Type doesn't matter much for fresh entry
     }
 </script>
 {% endblock %}

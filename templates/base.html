@@ -15,15 +15,16 @@
         <aside class="sidebar">
             <div class="brand">DEV.CORE</div>
             <nav>
-                <a href="/" class="nav-link {% if page_title == 'Dashboard' %}active{% endif %}">總表</a>
-                <a href="/cft_projects" class="nav-link {% if page_title == '專案列表' %}active{% endif %}">專案列表</a>
-                <a href="/meetings_log" class="nav-link {% if page_title == '會議規劃及紀錄' %}active{% endif %}">會議規劃及記錄</a>
-                <a href="/meetings" class="nav-link">會議規劃</a>
-                <a href="/dashboard" class="nav-link">總表</a>
-                <a href="/workload" class="nav-link">工作負荷</a>
-                <a href="/reports" class="nav-link">定期報告</a>
+                <a href="/" class="nav-link {% if page_title == 'Dashboard' %}active{% endif %}">總表 (Dashboard)</a>
+                <a href="/cft_projects" class="nav-link {% if page_title == '專案列表' %}active{% endif %}">專案列表
+                    (Projects)</a>
+                <a href="/meetings" class="nav-link {% if page_title == '會議規劃及紀錄' %}active{% endif %}">會議規劃
+                    (Meetings)</a>
+                <a href="/workload" class="nav-link {% if page_title == 'Engineer Workload' %}active{% endif %}">工作負荷
+                    (Workload)</a>
+                <a href="/reports" class="nav-link {% if page_title == '定期報告' %}active{% endif %}">定期報告 (Reports)</a>
                 <a href="/import_export" class="nav-link {% if page_title == '匯入匯出' %}active{% endif %}"
-                    style="color: var(--accent-purple);">匯入匯出</a>
+                    style="color: var(--accent-purple);">匯入匯出 (Sync)</a>
             </nav>
             <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border-color);">
                 <button id="togglePresent" class="btn" style="width: 100%">Subject Mode</button>

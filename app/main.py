@@ -32,8 +32,8 @@ async def dashboard(request: Request):
 async def cft_projects(request: Request):
     return templates.TemplateResponse("projects.html", {"request": request, "page_title": "專案列表"})
 
-@app.get("/meetings_log", response_class=HTMLResponse)
-async def meetings_log(request: Request):
+@app.get("/meetings", response_class=HTMLResponse)
+async def meetings_page(request: Request):
     return templates.TemplateResponse("meetings.html", {"request": request, "page_title": "會議規劃及紀錄"})
 
 @app.get("/import_export", response_class=HTMLResponse)
@@ -42,7 +42,7 @@ async def read_import_export(request: Request):
 
 @app.get("/reports", response_class=HTMLResponse)
 async def read_reports(request: Request):
-    return templates.TemplateResponse("reports.html", {"request": request, "page_title": "匯入匯出"})
+    return templates.TemplateResponse("reports.html", {"request": request, "page_title": "定期報告"})
 
 @app.get("/projects/{project_id}", response_class=HTMLResponse)
 async def project_detail(request: Request, project_id: int, db: Session = Depends(get_db)):

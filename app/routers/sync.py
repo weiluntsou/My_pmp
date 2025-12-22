@@ -68,7 +68,16 @@ def generate_markdown_content(projects: List[models.Project]) -> str:
 def export_projects(project_ids: List[int], db: Session = Depends(get_db)):
     projects = db.query(models.Project).filter(models.Project.id.in_(project_ids)).all()
     content = generate_markdown_content(projects)
-    return {"content": content}
+    
+    # Generate Filename
+    if len(projects) == 1:
+        # Sanitize filename
+        safe_name = "".join([c for c in projects[0].name if c.isalnum() or c in (' ', '-', '_')]).strip()
+        filename = f"{safe_name}.md"
+    else:
+        filename = f"Projects_Export_{datetime.now().strftime('%Y%m%d')}.md"
+        
+    return {"content": content, "filename": filename}
 
 @router.get("/template")
 def get_template():
@@ -108,11 +117,17 @@ async def import_projects(file: UploadFile = File(...), db: Session = Depends(ge
     if not text_content.startswith(MARKDOWN_HEADER):
         raise HTTPException(status_code=400, detail="Invalid file format. Header missing.")
         
-    # Simple Parsing Logic
-    projects_data = text_content.split("## Project: ")
+    # Robust Parsing Logic using Regex
+    import re
+    # Split by line that starts with "## Project: "
+    # The first element [0] will be the header/preamble, subsequent are projects
+    projects_data = re.split(r'^## Project: ', text_content, flags=re.MULTILINE)
+    
     log_messages = []
     
     for p_chunk in projects_data[1:]: # Skip preamble
+        if not p_chunk.strip(): continue # Skip empty chunks
+        
         lines = p_chunk.strip().split("\n")
         name = lines[0].strip()
         
@@ -153,7 +168,7 @@ async def import_projects(file: UploadFile = File(...), db: Session = Depends(ge
                             info[k.strip()] = v.strip()
                 elif clean_line.startswith("Schedule:"):
                     # Day=[Mon], Time=[10:00]
-                    import re
+                    # import re is already imported
                     m_day = re.search(r"Day=\[(.*?)\]", line)
                     m_time = re.search(r"Time=\[(.*?)\]", line)
                     if m_day: info['meeting_day'] = m_day.group(1)

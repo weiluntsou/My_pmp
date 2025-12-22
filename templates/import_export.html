@@ -132,7 +132,9 @@
                 body: JSON.stringify(selected)
             });
             const data = await res.json();
-            downloadString(data.content, "export_projects.md");
+            // Use filename from response if available, fallback to default
+            const filename = data.filename || "export_projects.md";
+            downloadString(data.content, filename);
         } catch (e) { console.error(e); alert("Export Failed"); }
     }
 

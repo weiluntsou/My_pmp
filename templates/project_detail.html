@@ -191,6 +191,7 @@
 {% block scripts %}
 <script>
     const projectId = {{ project.id }};
+    const projectDuration = {{ project.duration_weeks or 12 }};
     const weeklyData = {{ weekly_data | tojson }};
 
     // Prepare Chart Data
@@ -360,9 +361,6 @@
             track.appendChild(plannedBar);
 
             // 2. Actual Bars (Per week, to show variance)
-            // Or merged if same description? User asked for "same name connected".
-            // Let's grouping actuals similarly *within* this task timeframe
-
             task.weeks.forEach(w => {
                 const aStart = (w.week_number - 1) * weekWidth;
                 const aWidth = weekWidth - 4;
@@ -396,14 +394,10 @@
                     actualBar.innerText = w.actual_description;
                 }
 
-                // If merged view is preferred for actuals too, we'd need another grouping loop.
-                // For now, per-week actuals under the unified plan bar is very "Gantt-like" for tracking.
-
                 actualBar.onclick = () => openProgressModal(w, 'actual');
                 track.appendChild(actualBar);
             });
 
-            row.appendChild(track);
             row.appendChild(track);
             container.appendChild(row);
         });
@@ -412,7 +406,8 @@
         setTimeout(() => {
             const today = new Date();
             // Calculate week diff from start
-            const diffTime = Math.abs(today - startDate);
+            const safeStartDate = !isNaN(startDate) ? startDate : new Date("2025-01-01");
+            const diffTime = Math.abs(today - safeStartDate);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             const currentWeekIdx = Math.floor(diffDays / 7);
 
@@ -565,18 +560,17 @@
         if (weeklyData && weeklyData.length > 0) {
             maxW = Math.max(...weeklyData.map(d => d.week_number));
         } else {
-            maxW = {{ project.duration_weeks or 12 }
-        };
-    }
+            maxW = projectDuration;
+        }
 
-    // Open modal for next week
-    openProgressModal({
-        year: {{ project.year }},
-        week_number: maxW + 1,
+        // Open modal for next week
+        openProgressModal({
+            year: {{ project.year }},
+    week_number: maxW + 1,
         planned_description: '',
-        actual_description: '',
-        actual_hours: 0
-        }, 'actual'); // Type doesn't matter much for fresh entry
+            actual_description: '',
+                actual_hours: 0
+        }, 'actual'); 
     }
 </script>
 {% endblock %}

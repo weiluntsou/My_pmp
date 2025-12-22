@@ -58,6 +58,9 @@ async def project_detail(request: Request, project_id: int, db: Session = Depend
         d = w.__dict__.copy()
         if "_sa_instance_state" in d:
             del d["_sa_instance_state"]
+        # Convert date objects to strings for JSON serialization
+        if "meeting_date" in d and d["meeting_date"]:
+             d["meeting_date"] = d["meeting_date"].isoformat()
         safe_weekly_data.append(d)
     
     return templates.TemplateResponse("project_detail.html", {

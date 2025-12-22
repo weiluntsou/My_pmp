@@ -78,6 +78,7 @@ def get_template():
 - Year: 2025
 - CFT Unit: Marketing
 - Status: Planning
+- Request Unit: Requirements Team
 - Lead Engineer: John Doe
 - Description: This is a sample project imported from LLM.
 - Key Dates: Start=2025-01-01

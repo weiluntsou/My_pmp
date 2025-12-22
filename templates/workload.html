@@ -239,7 +239,13 @@
             card.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <div>
-                        <h4 style="margin: 0; font-size: 1.3em;">${eng.name}</h4>
+                        <h4 style="margin: 0; font-size: 1.3em;">
+                            ${eng.name}
+                            <button onclick="editEngineerName(${eng.id}, '${eng.name}')" 
+                                style="background:none; border:none; cursor:pointer; color:var(--text-secondary); margin-left:5px;">
+                                ✏️
+                            </button>
+                        </h4>
                         <div style="font-size: 0.8em; color: var(--text-secondary);">Week ${filterWeek} Total Load</div>
                     </div>
                     <div style="text-align: right; width: 150px;">
@@ -288,6 +294,30 @@
     function debugDashboard() {
         alert(`Debug:\nProjects: ${GLOBAL_PROJECTS.length}\nEngineers: ${GLOBAL_ENGINEERS.length}`);
         console.log("Global Projects", GLOBAL_PROJECTS);
+    }
+
+    async function editEngineerName(id, currentName) {
+        const newName = prompt("Enter new name for engineer:", currentName);
+        if (newName && newName !== currentName) {
+            try {
+                const res = await fetch(`/api/projects/engineers/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName })
+                });
+
+                if (res.ok) {
+                    // Update global state and re-render or reload
+                    // Simple reload to ensure all references update
+                    location.reload();
+                } else {
+                    alert("Failed to update engineer name");
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Error updating engineer name");
+            }
+        }
     }
 </script>
 {% endblock %}

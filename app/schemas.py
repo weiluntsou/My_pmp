@@ -24,6 +24,7 @@ class WeeklyProgressBase(BaseModel):
     planned_description: Optional[str] = None
     actual_description: Optional[str] = None
     actual_hours: Optional[float] = 0.0
+    meeting_date: Optional[date] = None
     meeting_id: Optional[int] = None
 
 class WeeklyProgressCreate(WeeklyProgressBase):

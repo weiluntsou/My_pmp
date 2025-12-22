@@ -75,6 +75,7 @@ class WeeklyProgress(Base):
     planned_description = Column(String)
     actual_description = Column(String, nullable=True)
     actual_hours = Column(Float, default=0.0)
+    meeting_date = Column(Date, nullable=True) # Actual date of the meeting/log
     meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=True) # Linked meeting for verification
     
     project = relationship("Project", back_populates="weekly_progress")

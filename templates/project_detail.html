@@ -38,8 +38,10 @@
 <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <h3>Schedule Progress</h3>
-        <button class="btn" style="border: 1px solid var(--accent-purple); color: var(--accent-purple);"
-            onclick="addNextWeek()">+ Add Week</button>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn" style="border: 1px solid var(--accent-purple); color: var(--accent-purple);"
+                onclick="addNextWeek()">+ Add Week</button>
+        </div>
     </div>
     <div style="width: 100%; overflow-x: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;">
         <div id="ganttContainer" style="min-width: 800px; position: relative;">
@@ -60,6 +62,12 @@
             </div>
 
             <div style="margin-bottom: 15px;">
+                <label style="color:var(--accent-purple);">Actual Progress (%) (Project Total Calc)</label>
+                <input type="number" id="pActualProgress" placeholder="e.g 100" class="btn"
+                    style="width:100%; margin-top:5px; text-align:left;" step="1" max="100" min="0">
+            </div>
+
+            <div style="margin-bottom: 15px;">
                 <label style="color:var(--accent-purple);">Planned Description</label>
                 <input type="text" id="pPlannedDesc" placeholder="Kickoff..." class="btn"
                     style="width:100%; margin-top:5px; text-align:left;" readonly>
@@ -75,9 +83,21 @@
                     style="width:100%; margin-top:5px; text-align:left;">
             </div>
 
-            <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                <button type="button" class="btn" onclick="closeProgressModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save</button>
+            <div style="display: flex; justify-content: space-between; gap: 10px;">
+                <div style="display: flex; gap: 5px;">
+                    <button type="button" class="btn" onclick="extendProject()"
+                        style="border: 1px solid var(--accent-purple); color: var(--accent-purple); font-size: 0.8em; padding: 5px 10px;">
+                        + 追加
+                    </button>
+                    <button type="button" class="btn" onclick="reduceProject()"
+                        style="border: 1px solid var(--accent-pink); color: var(--accent-pink); font-size: 0.8em; padding: 5px 10px;">
+                        - 縮減
+                    </button>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="btn" onclick="closeProgressModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
             </div>
         </form>
     </div>
@@ -266,10 +286,9 @@
             const planDesc = w.planned_description || 'Unspecified Work';
             const actDesc = w.actual_description || '';
 
-            // Group if BOTH Planned and Actual descriptions match the current task
+            // Group if Planned description matches the current task
             if (currentTask &&
-                currentTask.name === planDesc &&
-                currentTask.actualName === actDesc) {
+                currentTask.name === planDesc) {
 
                 currentTask.weeks.push(w);
                 currentTask.end = w.week_number;
@@ -457,6 +476,8 @@
             const aDescInput = document.getElementById('pActualDesc');
             if (pDescInput) pDescInput.value = data.planned_description || '';
             if (aDescInput) aDescInput.value = data.actual_description || '';
+            const pActualProg = document.getElementById('pActualProgress');
+            if (pActualProg) pActualProg.value = data.actual_progress || 0;
         } else {
             // Defaults for fresh entry
             const today = new Date();
@@ -465,9 +486,9 @@
             // document.getElementById('pPlanned').value = ''; // Removed
             // document.getElementById('pActual').value = ''; // Removed
             document.getElementById('pPlannedDesc').value = '';
-            document.getElementById('pPlannedDesc').value = '';
             document.getElementById('pActualDesc').value = '';
             document.getElementById('pActualHours').value = '';
+            document.getElementById('pActualProgress').value = '';
         }
         // Auto-fill hours if exists (need to ensure data passed has it)
         if (data && data.actual_hours) {
@@ -495,7 +516,8 @@
                     week_number: parseInt(week),
                     planned_description: plannedDesc,
                     actual_description: actualDesc,
-                    actual_hours: parseFloat(document.getElementById('pActualHours').value || 0)
+                    actual_hours: parseFloat(document.getElementById('pActualHours').value || 0),
+                    actual_progress: parseInt(document.getElementById('pActualProgress').value || 0)
                 })
             });
 
@@ -569,8 +591,55 @@
     week_number: maxW + 1,
         planned_description: '',
             actual_description: '',
-                actual_hours: 0
+                actual_hours: 0,
+                    actual_progress: 0
         }, 'actual'); 
+    }
+
+    async function extendProject() {
+        const currentWeekParam = document.getElementById('pWeek').value;
+        const currentWeek = parseInt(currentWeekParam);
+
+        if (!currentWeek) {
+            alert('Cannot determine current week context.');
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to INSERT a new week AFTER Week ${currentWeek}?`)) return;
+
+        try {
+            const res = await fetch(`/api/projects/${projectId}/extend?after_week=${currentWeek}`, { method: 'POST' });
+            if (res.ok) {
+                location.reload();
+            } else {
+                alert('Failed to extend project');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error extending project');
+        }
+    }
+
+    async function reduceProject() {
+        const currentWeekParam = document.getElementById('pWeek').value;
+        const currentWeek = parseInt(currentWeekParam);
+        if (!currentWeek) {
+            alert('Cannot determine current week context.');
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to DELETE Week ${currentWeek} and shift subsequent weeks?`)) return;
+        try {
+            const res = await fetch(`/api/projects/${projectId}/reduce?target_week=${currentWeek}`, { method: 'POST' });
+            if (res.ok) {
+                location.reload();
+            } else {
+                alert('Failed to reduce project duration');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error reducing project duration');
+        }
     }
 </script>
 {% endblock %}

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, desc
 from typing import List
 from app import models, schemas
 from app.database import get_db
@@ -29,6 +29,18 @@ def create_engineer(engineer: schemas.EngineerCreate, db: Session = Depends(get_
 @router.get("/engineers", response_model=List[schemas.Engineer])
 def read_engineers(db: Session = Depends(get_db)):
     return db.query(models.Engineer).all()
+
+@router.put("/engineers/{engineer_id}", response_model=schemas.Engineer)
+def update_engineer(engineer_id: int, engineer_update: schemas.EngineerCreate, db: Session = Depends(get_db)):
+    db_engineer = db.query(models.Engineer).filter(models.Engineer.id == engineer_id).first()
+    if not db_engineer:
+        raise HTTPException(status_code=404, detail="Engineer not found")
+    
+    db_engineer.name = engineer_update.name
+    # Update other fields if necessary
+    db.commit()
+    db.refresh(db_engineer)
+    return db_engineer
 
 @router.delete("/{project_id}")
 def delete_project(project_id: int, db: Session = Depends(get_db)):
@@ -214,14 +226,14 @@ def create_weekly_progress(project_id: int, progress: schemas.WeeklyProgressCrea
     db.commit()
     
     # Recalculate Project Total Progress
-    # Sum of PLANNED progress for weeks that have an actual description (indicating it's done/reported)
+    # Sum of ACTUAL progress for weeks that have an actual description (indicating it's done/reported)
     # Filter for non-empty actual_description
     total_progress = 0
     all_weeks = db.query(models.WeeklyProgress).filter(models.WeeklyProgress.project_id == project_id).all()
     
     for w in all_weeks:
         if w.actual_description and len(w.actual_description.strip()) > 0:
-            total_progress += w.planned_progress
+            total_progress += w.actual_progress # Use actual_progress instead of planned_progress
 
     db_project.progress = total_progress
     
@@ -281,3 +293,128 @@ def create_maintenance_log(project_id: int, log: schemas.MaintenanceLogCreate, d
     db.commit()
     
     return db_log
+
+@router.post("/{project_id}/extend", response_model=schemas.Project)
+def extend_project(project_id: int, after_week: int = None, db: Session = Depends(get_db)):
+    db_project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not db_project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Sync duration with actual max week to prevent "phantom week" errors
+    max_wp = db.query(func.max(models.WeeklyProgress.week_number)).filter(models.WeeklyProgress.project_id == project_id).scalar()
+    real_max_week = max_wp or 0
+    
+    # If DB duration is lagging, update it
+    if real_max_week > (db_project.duration_weeks or 0):
+        db_project.duration_weeks = real_max_week
+        db.commit() # Commit this fix immediately
+        db.refresh(db_project)
+
+    current_duration = db_project.duration_weeks or 12
+    
+    # Check if after_week is valid. If None, behave like append (after last week)
+    if after_week is None:
+        after_week = current_duration
+
+    # Allow after_week to be equal to current_duration (append at end)
+    # Also allow it to be 0 (insert at start)
+    if after_week < 0 or after_week > current_duration:
+         raise HTTPException(status_code=400, detail=f"Invalid week number: {after_week} (Max: {current_duration})")
+
+    # 1. Shift weeks > after_week forward by 1 (Iterate backwards to avoid collision)
+    # Get all potential subsequent weeks
+    later_weeks = db.query(models.WeeklyProgress).filter(
+        models.WeeklyProgress.project_id == project_id,
+        models.WeeklyProgress.week_number > after_week
+    ).order_by(desc(models.WeeklyProgress.week_number)).all()
+    
+    for wk in later_weeks:
+        wk.week_number += 1
+        
+    # 2. Add new WeeklyProgress for the new week (at after_week + 1)
+    new_week_num = after_week + 1
+    
+    # Try to copy description from previous week (after_week)
+    prev_week_prog = db.query(models.WeeklyProgress).filter(
+        models.WeeklyProgress.project_id == project_id,
+        models.WeeklyProgress.week_number == after_week
+    ).first()
+    
+    phase_desc = "Extended Development"
+    if prev_week_prog:
+        phase_desc = prev_week_prog.planned_description 
+        
+    new_wp = models.WeeklyProgress(
+        project_id=project_id,
+        week_number=new_week_num,
+        year=db_project.year,
+        planned_progress=0, 
+        actual_progress=0,
+        planned_description=phase_desc
+    )
+    db.add(new_wp)
+    
+    # 3. Increase Duration
+    db_project.duration_weeks = current_duration + 1
+    
+    # 4. Log
+    log = models.ProjectLog(project_id=project_id, content=f"Project extended: Inserted Week {new_week_num}. Duration: {db_project.duration_weeks} weeks.")
+    db.add(log)
+    
+    db.commit()
+    db.refresh(db_project)
+    return db_project
+
+@router.post("/{project_id}/reduce", response_model=schemas.Project)
+def reduce_project(project_id: int, target_week: int = None, db: Session = Depends(get_db)):
+    db_project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not db_project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # Sync duration with actual max week
+    max_wp = db.query(func.max(models.WeeklyProgress.week_number)).filter(models.WeeklyProgress.project_id == project_id).scalar()
+    real_max_week = max_wp or 0
+    if real_max_week > (db_project.duration_weeks or 0):
+        db_project.duration_weeks = real_max_week
+        db.commit()
+        db.refresh(db_project)
+
+    current_duration = db_project.duration_weeks or 12
+    if current_duration <= 1:
+        raise HTTPException(status_code=400, detail="Cannot reduce duration below 1 week")
+    
+    # If target_week is None, default to last week
+    if target_week is None:
+        target_week = current_duration
+
+    if target_week < 1 or target_week > current_duration:
+         raise HTTPException(status_code=400, detail=f"Invalid week number: {target_week} (Max: {current_duration})")
+
+    # 1. Remove WeeklyProgress at target_week
+    target_prog = db.query(models.WeeklyProgress).filter(
+        models.WeeklyProgress.project_id == project_id,
+        models.WeeklyProgress.week_number == target_week
+    ).first()
+    
+    if target_prog:
+        db.delete(target_prog)
+        
+    # 2. Shift weeks > target_week backward by 1
+    later_weeks = db.query(models.WeeklyProgress).filter(
+        models.WeeklyProgress.project_id == project_id,
+        models.WeeklyProgress.week_number > target_week
+    ).order_by(models.WeeklyProgress.week_number).all()
+    
+    for wk in later_weeks:
+        wk.week_number -= 1
+
+    # 3. Decrease Duration
+    db_project.duration_weeks = current_duration - 1
+    
+    # 4. Log
+    log = models.ProjectLog(project_id=project_id, content=f"Project duration reduced: Deleted Week {target_week}. Duration: {db_project.duration_weeks} weeks.")
+    db.add(log)
+    
+    db.commit()
+    db.refresh(db_project)
+    return db_project

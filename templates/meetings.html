@@ -201,6 +201,10 @@
 <script>
     let allProjects = [];
 
+    function dateStrFromDate(d) {
+        return d.toISOString().split('T')[0];
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         loadData();
     });
@@ -209,9 +213,9 @@
         try {
             const res = await fetch('/api/projects/');
             const data = await res.json();
-            // Filter out closed projects
-            const closedStatuses = ['Closed', 'Completed', 'Deployed', '结案', 'Done'];
-            allProjects = data.filter(p => !closedStatuses.includes(p.status));
+            // Filter for only Planning and Development projects
+            const activeStatuses = ['Planning', 'Development', '計畫中', '開發中'];
+            allProjects = data.filter(p => activeStatuses.includes(p.status));
 
             renderCalendar();
             renderList();
@@ -282,7 +286,55 @@
 
                 // Populate events
                 allProjects.forEach(p => {
-                    if (p.meeting_day === dayName && p.meeting_time) {
+                    if (p.weekly_progress) {
+                        // Check if we have a specific log for this week (prioritize specific date)
+                        // Or if p.meeting_day matches. 
+
+                        // Strategy:
+                        // 1. Find if there's a WeeklyProgress entry for this week (weekStart to weekEnd)
+                        //    Actually, WeeklyProgress has week_number. We know the week number of this `rowDiv`.
+                        //    Let's find if a WeeklyProgress exists for this week_number AND logic says its date falls on `d`.
+
+                        // Simplified: Check if p.weekly_progress has an entry where `meeting_date` matches `d`.
+                        const specificLog = p.weekly_progress.find(wp => wp.meeting_date === dateStrFromDate(d));
+
+                        // Recurrent check: if dayName matches meeting_day AND no specific log date overrides it to another day?
+                        // Or show both? Usually specific overrides.
+                        // If specific log exists for this week but on a DIFFERENT day, we shouldn't show the recurrent one? 
+                        // Implementation: If `specificLog` exists, show it.
+                        // ELSE if `p.meeting_day` == dayName AND no specific log for this week implies it's rescheduled?
+                        // Let's stick to simple: Show if specific date matches. OR if no specific date for this week and day matches recurrent.
+
+                        const wpForWeek = p.weekly_progress.find(wp => wp.week_number === getWeekNumber(d) && wp.year === d.getFullYear());
+
+                        let show = false;
+                        if (specificLog) {
+                            show = true;
+                        } else if (p.meeting_day === dayName && p.meeting_time) {
+                            // Only show recurrent if we haven't already logged it on a different day for this week
+                            if (!wpForWeek || !wpForWeek.meeting_date) {
+                                show = true;
+                            }
+                        }
+
+                        if (show) {
+                            const bodyDiv = col.querySelector('.cal-body');
+                            const div = document.createElement('div');
+                            div.className = 'cal-event';
+                            // Use actual time if we stored it? We don't store actual time, just date. Use default time.
+                            div.innerHTML = `<strong>${p.meeting_time || '??:??'}</strong> ${p.name}`;
+                            div.onclick = () => openManager(p.id, d);
+
+                            // Highlight if it's a realized log
+                            if (specificLog) {
+                                div.style.borderLeft = '3px solid #00ff00';
+                                div.style.background = 'rgba(0, 255, 0, 0.1)';
+                            }
+
+                            bodyDiv.appendChild(div);
+                        }
+                    } else if (p.meeting_day === dayName && p.meeting_time) {
+                        // Fallback if no weekly_progress array at all (shouldn't happen if filtered correctly but safety)
                         const bodyDiv = col.querySelector('.cal-body');
                         const div = document.createElement('div');
                         div.className = 'cal-event';
@@ -483,6 +535,7 @@
                 actual_description: actualDesc,
                 actual_hours: parseFloat(hours),
                 actual_progress: parseFloat(progress),
+                meeting_date: dateVal, // Send the explicit log date
                 // We need to provide planned_progress to avoid validation error if it's new
                 // If existing, backend handles partial update? No, backend `create_weekly_progress` uses `exclude_unset=True` for update.
                 // But for create new, defaults handles it.

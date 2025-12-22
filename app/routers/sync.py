@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app import models, schemas
 from app.database import get_db
 from datetime import datetime
+from typing import List, Optional
 import io
 
 router = APIRouter(
@@ -13,7 +14,7 @@ router = APIRouter(
 
 MARKDOWN_HEADER = "# PROJECT_EXPORT_v1"
 
-def generate_markdown_content(projects: list[models.Project]) -> str:
+def generate_markdown_content(projects: List[models.Project]) -> str:
     lines = [MARKDOWN_HEADER, ""]
     
     for p in projects:
@@ -64,7 +65,7 @@ def generate_markdown_content(projects: list[models.Project]) -> str:
     return "\n".join(lines)
 
 @router.post("/export")
-def export_projects(project_ids: list[int], db: Session = Depends(get_db)):
+def export_projects(project_ids: List[int], db: Session = Depends(get_db)):
     projects = db.query(models.Project).filter(models.Project.id.in_(project_ids)).all()
     content = generate_markdown_content(projects)
     return {"content": content}

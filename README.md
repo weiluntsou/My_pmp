@@ -1,13 +1,13 @@
-[English](#devmanage-tech) | [繁體中文](#devmanage-tech-%E7%B9%81%E9%AB%94%E4%B8%AD%E6%96%87%E7%89%88)
+[English](#mypmp) | [繁體中文](#mypmp-%E7%B9%81%E9%AB%94%E4%B8%AD%E6%96%87%E7%89%88)
 
-# DevManage-Tech
+# My_pmp
 **A Comprehensive Project Management Tool for Digital Development Teams**
 
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.95%2B-teal)
 
-DevManage-Tech is a modern, lightweight project management solution designed to streamline the workflow of digital development sections. It offers robust features for project tracking, meeting management, workload analysis, and automated reporting, all wrapped in a responsive web interface.
+My_pmp is a modern, lightweight project management solution designed to streamline the workflow of digital development sections. It offers robust features for project tracking, meeting management, workload analysis, and automated reporting, all wrapped in a responsive web interface.
 
 ## 📋 Table of Contents
 - [Features](#-features)
@@ -26,9 +26,12 @@ DevManage-Tech is a modern, lightweight project management solution designed to 
 
 - **📊 Dashboard Overview**: Get a bird's-eye view of all ongoing projects and critical metrics.
 - **🚀 Project Management**: Detailed tracking of project progress, including planned vs. actual timelines and weekly status updates.
-- **📅 Meeting Planner**: Integrated meeting scheduler and record keeper. Automatically filters completed projects to keep your schedule clean.
+  - **Gantt Chart**: Interactive 52-week timeline view for the entire project year.
+- **📅 Meeting Planner**: Integrated meeting scheduler and record keeper.
+  - **Schedule View**: Weekly (Mon-Fri) calendar view sorted by time with AM/PM separators.
+  - **Outlook Integration**: Generate Outlook (.ics) meeting invites directly from the log page with one click.
 - **👥 Workload Analysis**: Visualize engineer workload to balance tasks effectively and avoid burnout.
-- **🔄 Sync & Import/Export**: seamless data synchronization and support for importing/exporting meeting logs and project data.
+- **🔄 Sync & Import/Export**: Seamless data synchronization and support for importing/exporting meeting logs and project data via Markdown.
 - **📝 Automated Reports**: Generate regular statuses and comprehensive reports with a single click.
 
 ## 🛠 Tech Stack
@@ -125,14 +128,14 @@ Contributions are what make the open-source community such an amazing place to l
 Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
-Built with ❤️ by the DevManage-Tech Team.
+Built with ❤️ by **weiluntsou**.
 
 ---
 
-# DevManage-Tech (繁體中文版)
+# My_pmp (繁體中文版)
 **數位發展團隊的全方位專案管理工具**
 
-DevManage-Tech 是一個現代化、輕量級的專案管理解決方案，專為數位發展團隊的工作流程設計。它提供強大的功能來追蹤專案、管理會議、分析工作量以及自動化報告，所有這些都整合在一個響應式網頁介面中。
+My_pmp 是一個現代化、輕量級的專案管理解決方案，專為數位發展團隊的工作流程設計。它提供強大的功能來追蹤專案、管理會議、分析工作量以及自動化報告，所有這些都整合在一個響應式網頁介面中。
 
 ## 📋 目錄
 - [功能特色](#-功能特色)
@@ -151,9 +154,12 @@ DevManage-Tech 是一個現代化、輕量級的專案管理解決方案，專�
 
 - **📊 儀表板總覽**：一目了然地查看所有進行中的專案和關鍵指標。
 - **🚀 專案管理**：詳細追蹤專案進度，包括計畫與實際時程的對比以及每週狀態更新。
-- **📅 會議規劃**：整合會議排程和記錄保存。自動過濾已完成的專案，保持行程整潔。
+  - **甘特圖**：全年度 52 週互動式時間軸視圖。
+- **📅 會議規劃**：整合會議排程和記錄保存。
+  - **行事曆視圖**：每週 (週一至週五) 按時間排序的會議列表，並區分上午/下午。
+  - **Outlook 整合**：一鍵生成 Outlook (.ics) 會議邀請函，支援自訂主旨與內容格式。
 - **👥 工作量分析**：視覺化工程師的工作量，有效平衡任務並避免過度疲勞。
-- **🔄 同步與匯入/匯出**：無縫的資料同步，支援匯入/匯出會議記錄和專案資料。
+- **🔄 同步與匯入/匯出**：無縫的資料同步，支援匯入/匯出 Markdown 格式的會議記錄和專案資料。
 - **📝 自動化報告**：一鍵生成定期狀態和綜合報告。
 
 ## 🛠 技術棧
@@ -250,4 +256,4 @@ chmod +x run.sh
 本專案採用 MIT 授權。詳情請參閱 `LICENSE` 文件。
 
 ---
-由 DevManage-Tech 團隊用心打造。
+由 **weiluntsou** 用心打造。

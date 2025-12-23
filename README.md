@@ -70,8 +70,8 @@ Follow these steps to get a local copy up and running.
 
 1.  **Clone the repository**
     ```sh
-    git clone https://github.com/yourusername/DevManage-Tech.git
-    cd DevManage-Tech
+    git clone https://github.com/weiluntsou/My_pmp.git
+    cd My_pmp
     ```
 
 2.  **Create a Virtual Environment**
@@ -195,8 +195,8 @@ My_pmp/
 
 1.  **Clone 儲存庫**
     ```sh
-    git clone https://github.com/yourusername/DevManage-Tech.git
-    cd DevManage-Tech
+    git clone https://github.com/weiluntsou/My_pmp.git
+    cd My_pmp
     ```
 
 2.  **建立虛擬環境**

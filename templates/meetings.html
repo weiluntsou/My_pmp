@@ -103,6 +103,15 @@
                 <textarea id="mgrNextPlan" class="btn" style="width: 100%; min-height: 80px; margin-bottom: 15px;"
                     placeholder="Plan for the upcoming week..."></textarea>
 
+                <div style="margin-bottom: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+                    <label class="form-label">Requester</label>
+                    <input type="text" id="mgrRequester" class="btn" style="width: 100%; margin-bottom: 10px;"
+                        placeholder="Name or Email">
+                    <button class="btn" onclick="generateICS()"
+                        style="width: 100%; background: #2c3e50; border: 1px solid #444;">📅 Generate Outlook
+                        Invite</button>
+                </div>
+
                 <button class="btn btn-primary" onclick="saveLog()" style="width: 100%;">Save & Update Project</button>
             </div>
         </div>
@@ -124,7 +133,7 @@
 
     .week-grid {
         display: grid;
-        grid-template-columns: repeat(7, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         gap: 2px;
     }
 
@@ -254,9 +263,9 @@
             // Label
             const labelTitle = week.offset === 0 ? "This Week" : (week.offset === -1 ? "Last Week" : "Next Week");
 
-            // Range String
+            // Range String (Mon-Fri)
             const weekEnd = new Date(weekStart);
-            weekEnd.setDate(weekStart.getDate() + 6);
+            weekEnd.setDate(weekStart.getDate() + 4); // Only til Friday
             const rangeStr = `${weekStart.toLocaleDateString()} - ${weekEnd.toLocaleDateString()}`;
 
             rowDiv.innerHTML = `<div class="week-label">${labelTitle} <span style="font-size:0.8em; color:var(--text-secondary); margin-left:10px;">${rangeStr}</span></div>`;
@@ -265,8 +274,8 @@
             const gridDiv = document.createElement('div');
             gridDiv.className = 'week-grid';
 
-            // 7 Days
-            for (let i = 0; i < 7; i++) {
+            // 5 Days (Mon-Fri)
+            for (let i = 0; i < 5; i++) {
                 const d = new Date(weekStart);
                 d.setDate(weekStart.getDate() + i);
 
@@ -284,65 +293,87 @@
                     <div class="cal-body"></div>
                 `;
 
+                const bodyDiv = col.querySelector('.cal-body');
+                const dailyEvents = [];
+
                 // Populate events
                 allProjects.forEach(p => {
+                    let eventData = null;
+                    const logDate = dateStrFromDate(d);
+
                     if (p.weekly_progress) {
-                        // Check if we have a specific log for this week (prioritize specific date)
-                        // Or if p.meeting_day matches. 
+                        // 1. Specific Log?
+                        const specificLog = p.weekly_progress.find(wp => wp.meeting_date === logDate);
 
-                        // Strategy:
-                        // 1. Find if there's a WeeklyProgress entry for this week (weekStart to weekEnd)
-                        //    Actually, WeeklyProgress has week_number. We know the week number of this `rowDiv`.
-                        //    Let's find if a WeeklyProgress exists for this week_number AND logic says its date falls on `d`.
-
-                        // Simplified: Check if p.weekly_progress has an entry where `meeting_date` matches `d`.
-                        const specificLog = p.weekly_progress.find(wp => wp.meeting_date === dateStrFromDate(d));
-
-                        // Recurrent check: if dayName matches meeting_day AND no specific log date overrides it to another day?
-                        // Or show both? Usually specific overrides.
-                        // If specific log exists for this week but on a DIFFERENT day, we shouldn't show the recurrent one? 
-                        // Implementation: If `specificLog` exists, show it.
-                        // ELSE if `p.meeting_day` == dayName AND no specific log for this week implies it's rescheduled?
-                        // Let's stick to simple: Show if specific date matches. OR if no specific date for this week and day matches recurrent.
-
+                        // 2. Recurrent?
                         const wpForWeek = p.weekly_progress.find(wp => wp.week_number === getWeekNumber(d) && wp.year === d.getFullYear());
 
                         let show = false;
                         if (specificLog) {
                             show = true;
                         } else if (p.meeting_day === dayName && p.meeting_time) {
-                            // Only show recurrent if we haven't already logged it on a different day for this week
+                            // Only show recurrent if no specific log exists for this week on another day?
+                            // Logic maintained: Show if specific date matches. OR if no log for this week *at all* (or verified no date overlap), show recurrent.
                             if (!wpForWeek || !wpForWeek.meeting_date) {
                                 show = true;
                             }
                         }
 
                         if (show) {
-                            const bodyDiv = col.querySelector('.cal-body');
-                            const div = document.createElement('div');
-                            div.className = 'cal-event';
-                            // Use actual time if we stored it? We don't store actual time, just date. Use default time.
-                            div.innerHTML = `<strong>${p.meeting_time || '??:??'}</strong> ${p.name}`;
-                            div.onclick = () => openManager(p.id, d);
-
-                            // Highlight if it's a realized log
-                            if (specificLog) {
-                                div.style.borderLeft = '3px solid #00ff00';
-                                div.style.background = 'rgba(0, 255, 0, 0.1)';
-                            }
-
-                            bodyDiv.appendChild(div);
+                            eventData = {
+                                p: p,
+                                time: p.meeting_time || '00:00',
+                                isSpecific: !!specificLog,
+                                desc: specificLog ? specificLog.actual_description : ''
+                            };
                         }
                     } else if (p.meeting_day === dayName && p.meeting_time) {
-                        // Fallback if no weekly_progress array at all (shouldn't happen if filtered correctly but safety)
-                        const bodyDiv = col.querySelector('.cal-body');
-                        const div = document.createElement('div');
-                        div.className = 'cal-event';
-                        div.innerHTML = `<strong>${p.meeting_time}</strong> ${p.name}`;
-                        div.onclick = () => openManager(p.id, d);
-                        bodyDiv.appendChild(div);
+                        // Fallback (no progress array)
+                        eventData = {
+                            p: p,
+                            time: p.meeting_time,
+                            isSpecific: false
+                        };
                     }
+
+                    if (eventData) dailyEvents.push(eventData);
                 });
+
+                // Sort by Time
+                dailyEvents.sort((a, b) => a.time.localeCompare(b.time));
+
+                // Split AM/PM (Noon Separator)
+                const amEvents = dailyEvents.filter(e => e.time < '12:00');
+                const pmEvents = dailyEvents.filter(e => e.time >= '12:00');
+
+                // Render Helper
+                const renderEvent = (e) => {
+                    const div = document.createElement('div');
+                    div.className = 'cal-event';
+                    div.innerHTML = `<strong>${e.time}</strong> ${e.p.name}`;
+                    div.title = e.desc || e.p.name;
+                    div.onclick = () => openManager(e.p.id, d);
+
+                    if (e.isSpecific) {
+                        div.style.borderLeft = '3px solid #00ff00';
+                        div.style.background = 'rgba(0, 255, 0, 0.1)';
+                    }
+                    bodyDiv.appendChild(div);
+                };
+
+                amEvents.forEach(renderEvent);
+
+                // Separator
+                const sep = document.createElement('div');
+                sep.style.borderTop = '1px dashed #444'; // Subtle separators
+                sep.style.margin = '4px 0';
+                sep.style.textAlign = 'center';
+                sep.style.fontSize = '0.6em';
+                sep.style.color = '#666';
+                sep.innerText = '12:00';
+                bodyDiv.appendChild(sep);
+
+                pmEvents.forEach(renderEvent);
 
                 gridDiv.appendChild(col);
             }
@@ -568,6 +599,69 @@
             loadData();
 
         } catch (e) { console.error(e); alert('Error saving log'); }
+    }
+    function generateICS() {
+        if (!currentProject) return;
+        const dateVal = document.getElementById('mgrDate').value; // YYYY-MM-DD
+        const timeVal = currentProject.meeting_time || '09:00'; // HH:MM
+        const requester = document.getElementById('mgrRequester').value || '';
+        const desc = document.getElementById('mgrNextPlan').value || '';
+
+        // Parse Date/Time
+        const startStr = `${dateVal}T${timeVal}:00`;
+        const start = new Date(startStr);
+        if (isNaN(start.getTime())) {
+            alert("Invalid Date or Time");
+            return;
+        }
+
+        // End Time (Default 1 hour)
+        const end = new Date(start.getTime() + 60 * 60 * 1000);
+
+        // Format for ICS (YYYYMMDDTHHMMSS)
+        const formatICSDate = (d) => {
+            return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+        };
+
+        // Note: project detail is purely local time usually, but browser does UTC conversion on ISOString
+        // To keep it simple and consistent with "Floating Time" (no timezone), we remove the 'Z' and just use local values?
+        // Outlook prefers UTC usually. Let's stick to what `toISOString` gives (UTC) 
+        // BUT we constructed `start` from local time string. 
+        // Example: "2025-01-01T09:00:00" -> new Date() treats as local. 
+        // So `toISOString()` will convert 09:00 Local -> UTC. This is correct if we want 09:00 Local time effectively.
+
+        const now = formatICSDate(new Date());
+        const startICS = formatICSDate(start);
+        const endICS = formatICSDate(end);
+
+        // Get Actual Description (Last Meeting Content)
+        const actualDesc = document.getElementById('mgrActualDesc').value || '無';
+
+        const summary = `CFT ${currentProject.name}`;
+        const description = `Dear sirs: 本次主要討論${desc.replace(/\n/g, '\\n')}\\n\\n前次會議內容:${actualDesc.replace(/\n/g, '\\n')}`;
+
+        const icsContent =
+            `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//MyPMP//Meeting Schedule//EN
+BEGIN:VEVENT
+UID:${now}-${currentProject.id}@mypmp.com
+DTSTAMP:${now}
+DTSTART:${startICS}
+DTEND:${endICS}
+SUMMARY:${summary}
+DESCRIPTION:${description}
+LOCATION:Online/Meeting Room
+END:VEVENT
+END:VCALENDAR`;
+
+        const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = window.URL.createObjectURL(blob);
+        link.setAttribute('download', `${currentProject.name}_invite.ics`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 </script>
 {% endblock %}

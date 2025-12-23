@@ -114,14 +114,17 @@ async def import_projects(file: UploadFile = File(...), db: Session = Depends(ge
     except UnicodeDecodeError:
         raise HTTPException(status_code=400, detail="File must be UTF-8 encoded")
         
+    text_content = text_content.strip() # Remove leading/trailing whitespace/BOM
+    
     if not text_content.startswith(MARKDOWN_HEADER):
-        raise HTTPException(status_code=400, detail="Invalid file format. Header missing.")
+        # Fallback check for potential BOM or slight mismatch
+        if MARKDOWN_HEADER not in text_content[:50]:
+            raise HTTPException(status_code=400, detail="Invalid file format. Header missing.")
         
     # Robust Parsing Logic using Regex
     import re
-    # Split by line that starts with "## Project: "
-    # The first element [0] will be the header/preamble, subsequent are projects
-    projects_data = re.split(r'^## Project: ', text_content, flags=re.MULTILINE)
+    # Split by line that starts with "## Project: ", allowing for flexible spacing
+    projects_data = re.split(r'^\s*## Project:\s*', text_content, flags=re.MULTILINE)
     
     log_messages = []
     

@@ -55,6 +55,8 @@
     style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 100; justify-content: center; align-items: center;">
     <div class="card" style="width: 400px; max-width: 90%;">
         <h3>Update Weekly Progress</h3>
+        <div id="pDateRange"
+            style="color: var(--accent-cyan); font-size: 0.9em; margin-bottom: 10px; text-align: center;"></div>
         <form id="progressForm" onsubmit="submitProgress(event)">
             <div class="grid-2" style="margin-bottom: 15px;">
                 <input type="number" name="year" id="pYear" value="2025" placeholder="Year">
@@ -212,7 +214,7 @@
 <script>
     const projectId = {{ project.id }};
     const projectDuration = {{ project.duration_weeks or 12 }};
-    const weeklyData = {{ weekly_data | tojson }};
+    const weeklyData = {{ weekly_data | tojson }} || [];
 
     // Prepare Chart Data
     const labels = weeklyData.map(d => `Week ${d.week_number}`);
@@ -223,29 +225,52 @@
     document.addEventListener('DOMContentLoaded', renderGantt);
 
     function renderGantt() {
-        const container = document.getElementById('ganttContainer');
-        if (!container) return;
+        try {
+            const container = document.getElementById('ganttContainer');
+            if (!container) return;
 
-        container.innerHTML = ''; // Clear
+            container.innerHTML = ''; // Clear
 
-        // --- 0. Data Cleanup (Handle potentially duplicate weeks from backend) ---
-        // Keep the record with highest ID (assuming later = newer)
-        const uniqueMap = new Map();
-        weeklyData.forEach(item => {
-            const key = `${item.year}-${item.week_number}`;
-            if (!uniqueMap.has(key) || item.id > uniqueMap.get(key).id) {
-                uniqueMap.set(key, item);
-            }
-        });
-        const cleanData = Array.from(uniqueMap.values()).sort((a, b) => a.week_number - b.week_number);
+            // --- 0. Data Cleanup (Handle potentially duplicate weeks from backend) ---
+            // Keep the record with highest ID (assuming later = newer)
+            const uniqueMap = new Map();
+            weeklyData.forEach(item => {
+                const key = `${item.year}-${item.week_number}`;
+                if (!uniqueMap.has(key) || item.id > uniqueMap.get(key).id) {
+                    uniqueMap.set(key, item);
+                }
+            });
+            const cleanData = Array.from(uniqueMap.values()).sort((a, b) => a.week_number - b.week_number);
 
-        // --- 1. Dynamic Settings ---
-        const containerWidth = container.offsetWidth - 20; // Subtract padding
-        const startDate = new Date("{{ project.start_date }}" || "2025-01-01");
+            // --- 1. Dynamic Settings ---
+            const containerWidth = container.offsetWidth - 20; // Subtract padding
+            // const startDate = new Date("{{ project.start_date }}" || "2025-01-01"); // Old Logic
 
-        const maxWeek = Math.max(...cleanData.map(d => d.week_number), 12);
-        const totalWeeks = maxWeek;
-        const weekWidth = Math.floor((containerWidth - 100) / totalWeeks); // 100 for Label
+            // New Logic: Always 52 Weeks for the Project Year
+            const projectYear = {{ project.year or 2025 }};
+        const totalWeeks = 52;
+        const weekWidth = Math.floor((containerWidth - 100) / totalWeeks);
+
+        // Calculate ISO Week 1 Start Date (Monday)
+        function getISOWeekStart(year, week) {
+            const simple = new Date(year, 0, 1 + (week - 1) * 7);
+            const dow = simple.getDay();
+            const ISOweekStart = simple;
+            if (dow <= 4)
+                ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+            else
+                ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+            return ISOweekStart;
+        }
+
+        // Simple approximation for display: Jan 1st + offset? 
+        // Or just find the first Monday of the year?
+        // Let's us a simple logic: Week 1 starts effectively near Jan 1.
+        // To keep it aligned with standard calendars, let's just assume Jan 1 is in Week 1.
+        const yearStart = new Date(projectYear, 0, 1);
+        // Adjust to Monday?
+        // If we want exact dates, we need a robust getWeekDate function.
+        // For visual simplicity, let's iterate.
 
         // --- 2. Timeline Header ---
         const header = document.createElement('div');
@@ -258,7 +283,19 @@
         header.style.background = '#0d1117';
         header.style.zIndex = '10';
 
-        for (let i = 0; i < totalWeeks; i++) {
+        // Helper to get date of Monday for a given week number
+        function getDateOfISOWeek(w, y) {
+            var simple = new Date(y, 0, 1 + (w - 1) * 7);
+            var dow = simple.getDay();
+            var ISOweekStart = simple;
+            if (dow <= 4)
+                ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+            else
+                ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+            return ISOweekStart;
+        }
+
+        for (let i = 1; i <= totalWeeks; i++) {
             const weekDiv = document.createElement('div');
             weekDiv.style.flex = `0 0 ${weekWidth}px`;
             weekDiv.style.borderRight = '1px solid #30363d';
@@ -269,9 +306,9 @@
             weekDiv.style.overflow = 'hidden';
 
             // Calculate date
-            const d = new Date(startDate);
-            d.setDate(d.getDate() + (i * 7));
+            const d = getDateOfISOWeek(i, projectYear);
             weekDiv.innerText = `${d.getMonth() + 1}/${d.getDate()}`;
+            weekDiv.title = `Week ${i}: ${d.toLocaleDateString()}`;
 
             header.appendChild(weekDiv);
         }
@@ -421,28 +458,43 @@
             container.appendChild(row);
         });
 
-        // --- 5. Auto-Scroll to Current Date or Start ---
+        // --- 5. Auto-Scroll to Current Date ---
         setTimeout(() => {
-            const today = new Date();
-            // Calculate week diff from start
-            const safeStartDate = !isNaN(startDate) ? startDate : new Date("2025-01-01");
-            const diffTime = Math.abs(today - safeStartDate);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            const currentWeekIdx = Math.floor(diffDays / 7);
+            try {
+                const today = new Date();
+                // projectYr removed as it was unused and corrupted
+                // Actually, I can use the `projectYear` var I defined inside renderGantt ??
+                // `renderGantt` scope has `projectYear`.
 
-            if (currentWeekIdx > 0 && currentWeekIdx < totalWeeks) {
-                // Scroll to current week centered
-                const scrollPos = (currentWeekIdx * weekWidth) - (containerWidth / 2) + (weekWidth / 2);
-                container.parentElement.scrollLeft = Math.max(0, scrollPos);
-            } else {
-                // Scroll to first task start if today is out of range
-                if (tasks.length > 0) {
-                    const firstTaskStart = Math.min(...tasks.map(t => t.start));
-                    const scrollPos = ((firstTaskStart - 1) * weekWidth) - 50;
+                // This is inside renderGantt, so projectYear is accessible.
+
+                // Get current ISO Week
+                const d = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+                const dayNum = d.getUTCDay() || 7;
+                d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+                const isoYearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+                const currentWeekIdx = Math.ceil((((d - isoYearStart) / 86400000) + 1) / 7);
+
+                // Check if within project year
+                if (today.getFullYear() === projectYear && currentWeekIdx > 0 && currentWeekIdx <= totalWeeks) {
+                    // Scroll to current week centered
+                    // Index (currentWeekIdx) is 1-based, we want position
+                    const scrollPos = ((currentWeekIdx - 1) * weekWidth) - (containerWidth / 2) + (weekWidth / 2);
                     container.parentElement.scrollLeft = Math.max(0, scrollPos);
+                } else {
+                    // If not current year, scroll to start or first task
+                    if (tasks.length > 0) {
+                        const firstTaskStart = Math.min(...tasks.map(t => t.start));
+                        const scrollPos = ((firstTaskStart - 1) * weekWidth) - 50;
+                        container.parentElement.scrollLeft = Math.max(0, scrollPos);
+                    }
                 }
-            }
+            } catch (e) { console.error("Auto-scroll error:", e); }
         }, 100);
+    } catch (e) {
+        console.error(e);
+        alert("Gantt Chart Error: " + e.message);
+    }
     }
 
     function handleBarClick(e, task, xStart, wWidth, type) {
@@ -466,6 +518,25 @@
         if (data) {
             document.getElementById('pYear').value = data.year;
             document.getElementById('pWeek').value = data.week_number;
+
+            // Calculate Date Range
+            // Reuse getISOWeekStart logic if available or re-implement
+            // We have projectYear available globally? data.year might vary.
+            // Simple logic:
+            const simple = new Date(data.year, 0, 1 + (data.week_number - 1) * 7);
+            const dow = simple.getDay();
+            const ISOweekStart = simple;
+            if (dow <= 4)
+                ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+            else
+                ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+
+            const weekEnd = new Date(ISOweekStart);
+            weekEnd.setDate(ISOweekStart.getDate() + 6);
+
+            const fmt = (d) => d.toLocaleDateString();
+            document.getElementById('pDateRange').innerText = `${fmt(ISOweekStart)} - ${fmt(weekEnd)}`;
+
             // document.getElementById('pPlanned').value = data.planned_progress; // Removed
             // document.getElementById('pActual').value = data.actual_progress; // Removed
 

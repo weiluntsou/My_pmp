@@ -11,6 +11,7 @@ class Engineer(Base):
     role = Column(String, default="Engineer")
     
     projects = relationship("Project", back_populates="lead_engineer")
+    tasks = relationship("Task", back_populates="assignee")
 
 class ProjectLog(Base):
     __tablename__ = "project_logs"
@@ -62,6 +63,8 @@ class Project(Base):
     weekly_progress = relationship("WeeklyProgress", back_populates="project", cascade="all, delete-orphan")
     logs = relationship("ProjectLog", back_populates="project", order_by="desc(ProjectLog.created_at)", cascade="all, delete-orphan")
     maintenance_logs = relationship("MaintenanceLog", back_populates="project", order_by="desc(MaintenanceLog.log_date)", cascade="all, delete-orphan")
+    sprints = relationship("Sprint", back_populates="project", cascade="all, delete-orphan")
+    tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan")
 
 class WeeklyProgress(Base):
     __tablename__ = "weekly_progress"
@@ -107,3 +110,39 @@ class ProjectUpdate(Base):
 
     project = relationship("Project", back_populates="updates")
     meeting = relationship("Meeting", back_populates="updates")
+
+class Sprint(Base):
+    __tablename__ = "sprints"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    start_date = Column(Date)
+    end_date = Column(Date)
+    status = Column(String, default="future") # active, future, closed
+    project_id = Column(Integer, ForeignKey("projects.id"))
+
+    project = relationship("Project", back_populates="sprints")
+    tasks = relationship("Task", back_populates="sprint", cascade="all, delete-orphan")
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True)
+    description = Column(Text, nullable=True)
+    
+    # Links
+    sprint_id = Column(Integer, ForeignKey("sprints.id"), nullable=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    assignee_id = Column(Integer, ForeignKey("engineers.id"), nullable=True)
+
+    # Assessment / Status
+    priority = Column(String, default="Medium") # High, Medium, Low
+    status = Column(String, default="Todo") # Todo, In Progress, Done
+    health = Column(String, default="Green") # Green, Yellow, Red
+    progress = Column(Integer, default=0) # 0-100
+    pm_note = Column(Text, nullable=True) # Private PM remarks
+
+    project = relationship("Project", back_populates="tasks")
+    sprint = relationship("Sprint", back_populates="tasks")
+    assignee = relationship("Engineer", back_populates="tasks")

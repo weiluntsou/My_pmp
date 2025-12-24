@@ -131,4 +131,63 @@ class Meeting(MeetingBase):
     class Config:
         from_attributes = True
 
+class Config:
+        from_attributes = True
 
+# Sprint Schemas
+class SprintBase(BaseModel):
+    name: str
+    start_date: date
+    end_date: date
+    status: str = "future"
+    project_id: int
+
+class SprintCreate(SprintBase):
+    pass
+
+class SprintUpdate(BaseModel):
+    name: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    status: Optional[str] = None
+
+class Sprint(SprintBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+# Task Schemas
+class TaskBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    priority: str = "Medium"
+    status: str = "Todo"
+    health: str = "Green"
+    progress: int = 0
+    pm_note: Optional[str] = None
+    sprint_id: Optional[int] = None
+    assignee_id: Optional[int] = None
+    project_id: int
+
+class TaskCreate(TaskBase):
+    pass
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+    health: Optional[str] = None
+    progress: Optional[int] = None
+    pm_note: Optional[str] = None
+    sprint_id: Optional[int] = None
+    sprint_id: Optional[int] = None
+    assignee_id: Optional[int] = None
+
+class TaskBatchUpdateItem(TaskUpdate):
+    id: int
+
+class Task(TaskBase):
+    id: int
+    class Config:
+        from_attributes = True

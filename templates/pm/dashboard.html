@@ -1,0 +1,198 @@
+```
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="mb-3" style="display: flex; justify-content: space-between; align-items: center;">
+        <button onclick="history.back()" class="btn">⬅️ Back</button>
+        <span class="badge"
+            style="border: 1px solid var(--accent-cyan); color: var(--accent-cyan); padding: 8px 12px; font-size: 1em;">
+            {{ sprint.name if sprint else 'No Active Sprint' }}
+        </span>
+        <a href="/pm/assessment" class="btn">📝 Quick Assessment</a>
+    </div>
+
+    <!-- Metrics Row -->
+    <div class="grid-3" style="margin-bottom: 20px;">
+        <div class="card card-metric" style="border-left: 3px solid var(--accent-cyan);">
+            <div class="metric-label"
+                style="color: var(--text-secondary); text-transform: uppercase; font-size: 0.8em; letter-spacing: 1px;">
+                本衝刺完成率</div>
+            <div class="metric-value"
+                style="font-size: 2.5em; font-weight: bold; color: var(--accent-cyan); text-shadow: 0 0 10px rgba(0, 243, 255, 0.3); margin-top: 10px;">
+                <span id="metric-progress">--</span>%
+            </div>
+        </div>
+        <div class="card card-metric" style="border-left: 3px solid #ff4444;">
+            <div class="metric-label"
+                style="color: var(--text-secondary); text-transform: uppercase; font-size: 0.8em; letter-spacing: 1px;">
+                高風險項目</div>
+            <div class="metric-value" id="metric-risk"
+                style="font-size: 2.5em; font-weight: bold; color: #ff4444; text-shadow: 0 0 10px rgba(255, 68, 68, 0.3); margin-top: 10px;">
+                --</div>
+        </div>
+        <div class="card card-metric" style="border-left: 3px solid var(--accent-purple);">
+            <div class="metric-label"
+                style="color: var(--text-secondary); text-transform: uppercase; font-size: 0.8em; letter-spacing: 1px;">
+                總任務數</div>
+            <div class="metric-value" id="metric-total"
+                style="font-size: 2.5em; font-weight: bold; color: var(--accent-purple); text-shadow: 0 0 10px rgba(188, 19, 254, 0.3); margin-top: 10px;">
+                --</div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid-2" style="margin-bottom: 20px;">
+        <div class="card">
+            <h3>健康度分佈 (Health)</h3>
+            <div style="position: relative; height: 250px;">
+                <canvas id="healthChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h3>狀態分佈 (Status)</h3>
+            <div style="position: relative; height: 250px;">
+                <canvas id="statusChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Risk Watchlist -->
+    <div class="card">
+        <h3 style="color: #ff4444; border-bottom-color: #ff4444;">⚠️ 風險追蹤清單</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+            <thead>
+                <tr>
+                    <th
+                        style="padding: 10px; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">
+                        狀態</th>
+                    <th
+                        style="padding: 10px; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">
+                        任務名稱</th>
+                    <th
+                        style="padding: 10px; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">
+                        負責人</th>
+                    <th
+                        style="padding: 10px; border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">
+                        PM 備註</th>
+                </tr>
+            </thead>
+            <tbody id="risk-table-body">
+                <!-- JS Populates -->
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Chart Defaults for Dark Theme
+    Chart.defaults.color = '#8b949e';
+    Chart.defaults.borderColor = '#30363d';
+
+    async function loadDashboard() {
+        try {
+            const response = await fetch('/pm/dashboard/stats');
+            const data = await response.json();
+
+            // 1. Metrics
+            document.getElementById('metric-progress').textContent = data.avg_progress;
+
+            // Calc Risk Count
+            const riskCount = (data.health_counts.Yellow || 0) + (data.health_counts.Red || 0);
+            document.getElementById('metric-risk').textContent = riskCount;
+            document.getElementById('metric-total').textContent = data.total_tasks;
+
+            // 2. Risk Table
+            const tbody = document.getElementById('risk-table-body');
+            tbody.innerHTML = '';
+            if (data.risk_items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: var(--text-secondary);">✅ 目前無風險項目</td></tr>';
+            } else {
+                data.risk_items.forEach(item => {
+                    const tr = document.createElement('tr');
+
+                    let badgeColor = item.health === 'Red' ? '#ff4444' : '#ffc107';
+                    let badgeText = item.health === 'Red' ? '🔴 落後' : '🟡 風險';
+
+                    tr.innerHTML = `
+                        <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <span style="border: 1px solid ${badgeColor}; color: ${badgeColor}; padding: 2px 6px; border-radius: 4px; font-size: 0.8em;">${badgeText}</span>
+                        </td>
+                        <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-weight: bold; color: var(--text-primary);">${item.title}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--text-secondary);">${item.assignee}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--text-secondary); font-style: italic;">${item.pm_note || '--'}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            // 3. Charts
+            renderHealthChart(data.health_counts);
+            renderStatusChart(data.status_counts);
+
+        } catch (error) {
+            console.error("Failed to load dashboard data", error);
+        }
+    }
+
+    function renderHealthChart(counts) {
+        const ctx = document.getElementById('healthChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['正常 (Green)', '風險 (Yellow)', '落後 (Red)'],
+                datasets: [{
+                    data: [counts.Green, counts.Yellow, counts.Red],
+                    backgroundColor: ['#00f3ff', '#ffc107', '#ff4444'],
+                    borderWidth: 0,
+                    hoverOffset: 10
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right' }
+                }
+            }
+        });
+    }
+
+    function renderStatusChart(counts) {
+        const ctx = document.getElementById('statusChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['待處理', '進行中', '已完成'],
+                datasets: [{
+                    label: 'Tasks',
+                    data: [counts.Todo, counts['In Progress'], counts.Done],
+                    backgroundColor: ['#30363d', '#bc13fe', '#00f3ff'],
+                    borderRadius: 4,
+                    barPercentage: 0.6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255,255,255,0.05)' }
+                    },
+                    x: {
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
+
+    // Init
+    loadDashboard();
+</script>
+{% endblock %}
+```

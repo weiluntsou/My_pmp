@@ -34,20 +34,25 @@
     <p style="margin-top: 20px; color: var(--text-primary);">{{ project.description or 'No description provided.' }}</p>
 </div>
 
-<!-- Weekly Progress / Gantt Chart -->
-<div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h3>Schedule Progress</h3>
-        <div style="display: flex; gap: 10px;">
-            <button class="btn" style="border: 1px solid var(--accent-purple); color: var(--accent-purple);"
+<!-- Project Timeline -->
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h3 style="margin: 0;">Project Timeline & Roadmap</h3>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <div class="btn-group" style="margin-right: 15px;">
+                <a href="?view_mode=week&focus_date={{ gantt.focus_date }}"
+                    class="btn btn-sm {{ 'btn-primary' if gantt.view_mode == 'week' else 'btn-outline-secondary' }}">Week</a>
+                <a href="?view_mode=month&focus_date={{ gantt.focus_date }}"
+                    class="btn btn-sm {{ 'btn-primary' if gantt.view_mode == 'month' else 'btn-outline-secondary' }}">Month</a>
+                <a href="?view_mode=quarter&focus_date={{ gantt.focus_date }}"
+                    class="btn btn-sm {{ 'btn-primary' if gantt.view_mode == 'quarter' else 'btn-outline-secondary' }}">Quarter</a>
+            </div>
+            <button class="btn"
+                style="border: 1px solid var(--accent-purple); color: var(--accent-purple); font-size: 0.9em; padding: 5px 10px;"
                 onclick="addNextWeek()">+ Add Week</button>
         </div>
     </div>
-    <div style="width: 100%; overflow-x: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;">
-        <div id="ganttContainer" style="min-width: 800px; position: relative;">
-            <!-- Gantt rendered by JS -->
-        </div>
-    </div>
+    {% include "projects/gantt.html" %}
 </div>
 
 <!-- Add Progress Modal -->
@@ -227,302 +232,29 @@
     function renderGantt() {
         try {
             const container = document.getElementById('ganttContainer');
-            if (!container) return;
+            if (!container) return; // Should not happen with new template
 
-            container.innerHTML = ''; // Clear
-
-            // --- 0. Data Cleanup (Handle potentially duplicate weeks from backend) ---
-            // Keep the record with highest ID (assuming later = newer)
-            const uniqueMap = new Map();
-            weeklyData.forEach(item => {
-                const key = `${item.year}-${item.week_number}`;
-                if (!uniqueMap.has(key) || item.id > uniqueMap.get(key).id) {
-                    uniqueMap.set(key, item);
-                }
-            });
-            const cleanData = Array.from(uniqueMap.values()).sort((a, b) => a.week_number - b.week_number);
-
-            // --- 1. Dynamic Settings ---
-            const containerWidth = container.offsetWidth - 20; // Subtract padding
-            // const startDate = new Date("{{ project.start_date }}" || "2025-01-01"); // Old Logic
-
-            // New Logic: Always 52 Weeks for the Project Year
-            const projectYear = {{ project.year or 2025 }};
-        const totalWeeks = 52;
-        const weekWidth = Math.floor((containerWidth - 100) / totalWeeks);
-
-        // Calculate ISO Week 1 Start Date (Monday)
-        function getISOWeekStart(year, week) {
-            const simple = new Date(year, 0, 1 + (week - 1) * 7);
-            const dow = simple.getDay();
-            const ISOweekStart = simple;
-            if (dow <= 4)
-                ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
-            else
-                ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
-            return ISOweekStart;
+            // This function is largely obsolete if we use the new Gantt template.
+            // But let's leave it safe.
+        } catch (e) {
+            console.error(e);
         }
 
-        // Simple approximation for display: Jan 1st + offset? 
-        // Or just find the first Monday of the year?
-        // Let's us a simple logic: Week 1 starts effectively near Jan 1.
-        // To keep it aligned with standard calendars, let's just assume Jan 1 is in Week 1.
-        const yearStart = new Date(projectYear, 0, 1);
-        // Adjust to Monday?
-        // If we want exact dates, we need a robust getWeekDate function.
-        // For visual simplicity, let's iterate.
-
-        // --- 2. Timeline Header ---
-        const header = document.createElement('div');
-        header.style.display = 'flex';
-        header.style.borderBottom = '1px solid #30363d';
-        header.style.marginBottom = '10px';
-        header.style.paddingLeft = '100px'; // Space for row labels
-        header.style.position = 'sticky';
-        header.style.top = '0';
-        header.style.background = '#0d1117';
-        header.style.zIndex = '10';
-
-        // Helper to get date of Monday for a given week number
-        function getDateOfISOWeek(w, y) {
-            var simple = new Date(y, 0, 1 + (w - 1) * 7);
-            var dow = simple.getDay();
-            var ISOweekStart = simple;
-            if (dow <= 4)
-                ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
-            else
-                ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
-            return ISOweekStart;
-        }
-
-        for (let i = 1; i <= totalWeeks; i++) {
-            const weekDiv = document.createElement('div');
-            weekDiv.style.flex = `0 0 ${weekWidth}px`;
-            weekDiv.style.borderRight = '1px solid #30363d';
-            weekDiv.style.padding = '5px 0';
-            weekDiv.style.fontSize = '0.7em';
-            weekDiv.style.textAlign = 'center';
-            weekDiv.style.color = '#8b949e';
-            weekDiv.style.overflow = 'hidden';
-
-            // Calculate date
-            const d = getDateOfISOWeek(i, projectYear);
-            weekDiv.innerText = `${d.getMonth() + 1}/${d.getDate()}`;
-            weekDiv.title = `Week ${i}: ${d.toLocaleDateString()}`;
-
-            header.appendChild(weekDiv);
-        }
-        container.appendChild(header);
-
-        // --- 3. Group by Task (Waterfall Logic) ---
-        // A "Task" is a contiguous block of planned_description
-        const tasks = [];
-        let currentTask = null;
-
-        cleanData.forEach(w => {
-            const planDesc = w.planned_description || 'Unspecified Work';
-            const actDesc = w.actual_description || '';
-
-            // Group if Planned description matches the current task
-            if (currentTask &&
-                currentTask.name === planDesc) {
-
-                currentTask.weeks.push(w);
-                currentTask.end = w.week_number;
-            } else {
-                if (currentTask) tasks.push(currentTask);
-                currentTask = {
-                    name: planDesc,
-                    actualName: actDesc,
-                    start: w.week_number,
-                    end: w.week_number,
-                    weeks: [w]
-                };
-            }
-        });
-        if (currentTask) tasks.push(currentTask);
-
-        // --- 4. Render Rows ---
-        tasks.forEach(task => {
-            const row = document.createElement('div');
-            row.style.height = '60px'; // Height for pair of bars
-            row.style.display = 'flex';
-            row.style.borderBottom = '1px solid rgba(48, 54, 61, 0.3)';
-            row.style.alignItems = 'center';
-            row.style.position = 'relative';
-
-            // Task Label
-            const label = document.createElement('div');
-            label.style.width = '100px';
-            label.style.flexShrink = '0';
-            label.style.padding = '0 10px';
-            label.style.fontSize = '0.8em';
-            label.style.color = '#e6edf3';
-            label.style.fontWeight = 'bold';
-            label.style.whiteSpace = 'nowrap';
-            label.style.overflow = 'hidden';
-            label.style.textOverflow = 'ellipsis';
-            label.innerText = task.name;
-            label.title = task.name;
-            row.appendChild(label);
-
-            // Track
-            const track = document.createElement('div');
-            track.style.flexGrow = '1';
-            track.style.height = '100%';
-            track.style.position = 'relative';
-            track.style.borderLeft = '1px solid #30363d';
-
-            // Grid Lines
-            for (let i = 0; i < totalWeeks; i++) {
-                const line = document.createElement('div');
-                line.style.position = 'absolute';
-                line.style.left = `${i * weekWidth}px`;
-                line.style.width = '1px';
-                line.style.height = '100%';
-                line.style.background = '#30363d';
-                line.style.opacity = '0.3';
-                track.appendChild(line);
-            }
-
-            // Render Bars
-
-            // 1. Planned Bar (Merged for the task)
-            const pStart = (task.start - 1) * weekWidth;
-            const pWidth = (task.end - task.start + 1) * weekWidth;
-
-            const plannedBar = document.createElement('div');
-            plannedBar.style.position = 'absolute';
-            plannedBar.style.left = `${pStart}px`;
-            plannedBar.style.width = `${pWidth - 4}px`;
-            plannedBar.style.top = '5px';
-            plannedBar.style.height = '22px';
-            plannedBar.style.background = '#bc13fe';
-            plannedBar.style.borderRadius = '4px';
-            plannedBar.style.opacity = '0.8';
-            plannedBar.style.fontSize = '0.7em';
-            plannedBar.style.color = '#fff';
-            plannedBar.style.display = 'flex';
-            plannedBar.style.alignItems = 'center';
-            plannedBar.style.paddingLeft = '5px';
-            plannedBar.style.overflow = 'hidden';
-            plannedBar.style.whiteSpace = 'nowrap';
-            plannedBar.style.textOverflow = 'ellipsis';
-            // Display Task Name in Bar (as requested)
-            plannedBar.innerHTML = `<span style="margin-right:5px; font-weight:bold;">${task.name}</span>`;
-
-            // Click Handler (Smart Select)
-            plannedBar.onclick = (e) => handleBarClick(e, task, pStart, weekWidth, 'planned');
-            plannedBar.style.cursor = 'pointer';
-            track.appendChild(plannedBar);
-
-            // 2. Actual Bars (Per week, to show variance)
-            task.weeks.forEach(w => {
-                const aStart = (w.week_number - 1) * weekWidth;
-                const aWidth = weekWidth - 4;
-                const hasProgress = w.actual_description && w.actual_description.length > 0;
-
-                const actualBar = document.createElement('div');
-                actualBar.style.position = 'absolute';
-                actualBar.style.left = `${aStart}px`;
-                actualBar.style.width = `${aWidth}px`;
-                actualBar.style.top = '30px';
-                actualBar.style.height = '22px';
-                actualBar.style.background = hasProgress ? '#00f3ff' : 'transparent';
-                actualBar.style.border = hasProgress ? 'none' : '1px dashed #00f3ff';
-                actualBar.style.borderRadius = '4px';
-                actualBar.style.opacity = '0.7'; // Increased opacity for readability
-                actualBar.style.cursor = 'pointer';
-                actualBar.style.overflow = 'hidden';
-                actualBar.style.whiteSpace = 'nowrap';
-                actualBar.style.textOverflow = 'ellipsis';
-                actualBar.style.color = '#000'; // Dark text for contrast against blue
-                actualBar.style.fontWeight = 'bold';
-                actualBar.style.fontSize = '0.7em';
-                actualBar.style.display = 'flex';
-                actualBar.style.alignItems = 'center';
-                actualBar.style.paddingLeft = '5px';
-
-                actualBar.title = `Actual: ${w.actual_description || ''}`;
-
-                // Display Description
-                if (w.actual_description) {
-                    actualBar.innerText = w.actual_description;
-                }
-
-                actualBar.onclick = () => openProgressModal(w, 'actual');
-                track.appendChild(actualBar);
-            });
-
-            row.appendChild(track);
-            container.appendChild(row);
-        });
-
-        // --- 5. Auto-Scroll to Current Date ---
-        setTimeout(() => {
-            try {
-                const today = new Date();
-                // projectYr removed as it was unused and corrupted
-                // Actually, I can use the `projectYear` var I defined inside renderGantt ??
-                // `renderGantt` scope has `projectYear`.
-
-                // This is inside renderGantt, so projectYear is accessible.
-
-                // Get current ISO Week
-                const d = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-                const dayNum = d.getUTCDay() || 7;
-                d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-                const isoYearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-                const currentWeekIdx = Math.ceil((((d - isoYearStart) / 86400000) + 1) / 7);
-
-                // Check if within project year
-                if (today.getFullYear() === projectYear && currentWeekIdx > 0 && currentWeekIdx <= totalWeeks) {
-                    // Scroll to current week centered
-                    // Index (currentWeekIdx) is 1-based, we want position
-                    const scrollPos = ((currentWeekIdx - 1) * weekWidth) - (containerWidth / 2) + (weekWidth / 2);
-                    container.parentElement.scrollLeft = Math.max(0, scrollPos);
-                } else {
-                    // If not current year, scroll to start or first task
-                    if (tasks.length > 0) {
-                        const firstTaskStart = Math.min(...tasks.map(t => t.start));
-                        const scrollPos = ((firstTaskStart - 1) * weekWidth) - 50;
-                        container.parentElement.scrollLeft = Math.max(0, scrollPos);
-                    }
-                }
-            } catch (e) { console.error("Auto-scroll error:", e); }
-        }, 100);
-    } catch (e) {
-        console.error(e);
-        alert("Gantt Chart Error: " + e.message);
-    }
-    }
-
-    function handleBarClick(e, task, xStart, wWidth, type) {
-        // Calculate relative click inside the bar
-        const rect = e.target.closest('div').getBoundingClientRect();
-        // Adjust for potential padding/margins of parent if needed, but getBoundingClientRect is absolute viewport
-        // Actually, we can just use the index within the task array
-        // But the bar is merged.
-
-        const clickX = e.clientX - rect.left;
-        const index = Math.floor(clickX / wWidth);
-        const w = task.weeks[index];
-        if (w) openProgressModal(w, type);
+        // --- Fix for Template Variable Injection ---
+        // New Logic: Always 52 Weeks for the Project Year
+        const projectYear = {{ project.year or 2025 }};
+    const totalWeeks = 52;
     }
 
     function openProgressModal(data = null, type = 'planned') {
         const modal = document.getElementById('progressModal');
         modal.style.display = 'flex';
 
-        // Auto-fill form if data is provided
         if (data) {
             document.getElementById('pYear').value = data.year;
             document.getElementById('pWeek').value = data.week_number;
 
-            // Calculate Date Range
-            // Reuse getISOWeekStart logic if available or re-implement
-            // We have projectYear available globally? data.year might vary.
-            // Simple logic:
+            // Simple Date Logic for Display
             const simple = new Date(data.year, 0, 1 + (data.week_number - 1) * 7);
             const dow = simple.getDay();
             const ISOweekStart = simple;
@@ -537,12 +269,6 @@
             const fmt = (d) => d.toLocaleDateString();
             document.getElementById('pDateRange').innerText = `${fmt(ISOweekStart)} - ${fmt(weekEnd)}`;
 
-            // document.getElementById('pPlanned').value = data.planned_progress; // Removed
-            // document.getElementById('pActual').value = data.actual_progress; // Removed
-
-            // Add description fields to the modal dynamically or update existing ones?
-            // User asked to edit "week description". The modal currently only has progress %.
-            // We need to add description inputs to the modal structure first.
             const pDescInput = document.getElementById('pPlannedDesc');
             const aDescInput = document.getElementById('pActualDesc');
             if (pDescInput) pDescInput.value = data.planned_description || '';
@@ -550,18 +276,14 @@
             const pActualProg = document.getElementById('pActualProgress');
             if (pActualProg) pActualProg.value = data.actual_progress || 0;
         } else {
-            // Defaults for fresh entry
             const today = new Date();
             document.getElementById('pYear').value = today.getFullYear();
             document.getElementById('pWeek').value = '';
-            // document.getElementById('pPlanned').value = ''; // Removed
-            // document.getElementById('pActual').value = ''; // Removed
             document.getElementById('pPlannedDesc').value = '';
             document.getElementById('pActualDesc').value = '';
             document.getElementById('pActualHours').value = '';
             document.getElementById('pActualProgress').value = '';
         }
-        // Auto-fill hours if exists (need to ensure data passed has it)
         if (data && data.actual_hours) {
             document.getElementById('pActualHours').value = data.actual_hours;
         }
@@ -602,8 +324,6 @@
             alert('Error updating progress');
         }
     }
-
-    // --- New Functions for Close / Maintenance ---
 
     function openCloseModal() {
         document.getElementById('closeProjectModal').style.display = 'flex';
@@ -658,7 +378,7 @@
 
         // Open modal for next week
         openProgressModal({
-            year: {{ project.year }},
+            year: {{ project.year or 2025 }},
     week_number: maxW + 1,
         planned_description: '',
             actual_description: '',

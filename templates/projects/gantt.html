@@ -1,0 +1,133 @@
+<!-- Toolbar -->
+<div class="d-flex justify-content-between align-items-center mb-3"
+    style="background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+    <div class="btn-group">
+        <button class="btn btn-outline-secondary btn-sm" onclick="shiftDate(-1)"> &lt; Prev </button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="shiftDate(1)"> Next &gt; </button>
+    </div>
+
+    <div style="font-weight: bold; color: var(--accent-cyan); text-transform: uppercase; font-size: 0.9em;">
+        {{ gantt.headers[0].label }} - {{ gantt.headers[-1].label }}
+    </div>
+</div>
+
+<!-- Gantt Scroll Container -->
+<div style="overflow-x: auto; position: relative; border: 1px solid var(--border-color); border-radius: 6px;">
+    <!-- Min-Width Wrapper to ensure alignment -->
+    <div style="min-width: 1000px; position: relative;">
+
+        <!-- Headers -->
+        <div
+            style="display: grid; grid-template-columns: {{ gantt.grid_template }}; gap: 1px; background: var(--border-color);">
+            {% for h in gantt.headers %}
+            <div
+                style="background: rgba(13, 17, 23, 0.9); padding: 8px; text-align: center; font-size: 0.8rem; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                {{ h.label }}
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Grid Lines Background Layer -->
+        <div
+            style="display: grid; grid-template-columns: {{ gantt.grid_template }}; position: absolute; top: 38px; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none;">
+            {% for h in gantt.headers %}
+            <div style="border-right: 1px solid var(--border-color); opacity: 0.3;"></div>
+            {% endfor %}
+        </div>
+
+        <!-- Bars Layer -->
+        <div style="position: relative; z-index: 1; padding-top: 10px;">
+            {% for bar in gantt.bars %}
+            <!-- Row Container -->
+            <div
+                style="display: grid; grid-template-columns: {{ gantt.grid_template }}; margin-bottom: 8px; position: relative; height: 50px; align-items: start; border-bottom: 1px solid rgba(48, 54, 61, 0.3);">
+
+                <!-- Planned Bar -->
+                <div style="
+                    grid-column: {{ bar.grid_start }} / span {{ bar.grid_span }};
+                    background: linear-gradient(90deg, var(--accent-purple), #a855f7);
+                    border-radius: 4px;
+                    height: 20px;
+                    display: flex;
+                    align-items: center;
+                    padding: 0 10px;
+                    color: white;
+                    font-size: 0.75rem;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                    cursor: pointer;
+                    opacity: 0.9;
+                    margin-top: 4px;
+                    z-index: 2;
+                " title="Planned: {{ bar.name }}" onclick="alert('Planned: {{ bar.name }}')">
+                    {{ bar.name }}
+                </div>
+
+                <!-- Actual Bars (Overlay/Stacked) -->
+                {% for act in bar.actuals %}
+                <div style="
+                    grid-column: {{ act.grid_start }} / span {{ act.grid_span }};
+                    background: {% if act.has_content %}var(--accent-cyan){% else %}transparent{% endif %};
+                    border: {% if act.has_content %}none{% else %}1px dashed var(--accent-cyan){% endif %};
+                    height: 16px;
+                    border-radius: 3px;
+                    position: absolute;
+                    top: 28px;
+                    opacity: 0.8;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 3;
+                " title="Week {{ act.week }}: {{ act.description or 'No description' }}" onclick='if(typeof openProgressModal === "function") openProgressModal({
+                        "year": {{ act.year }},
+                        "week_number": {{ act.week }},
+                        "actual_progress": {{ act.progress }},
+                        "actual_description": "{{ act.description | replace("\r\n", " ") | replace("\n", " ") | replace("\"", "&quot;") if act.description else "" }}",
+                        "actual_hours": {{ act.actual_hours }},
+                        "planned_progress": {{ act.planned_progress }},
+                        "planned_description": "{{ act.planned_description | replace("\r\n", " ") | replace("\n", " ") | replace("\"", "&quot;") if act.planned_description else "" }}"
+                    }, "actual")'>
+                    {% if act.has_content %}
+                    <div style="width: 6px; height: 6px; background: rgba(0,0,0,0.3); border-radius: 50%;"></div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+
+            {% if not gantt.bars %}
+            <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
+                No tasks visible in this time range.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    function shiftDate(direction) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentMode = urlParams.get('view_mode') || 'week';
+        let currentDateStr = urlParams.get('focus_date');
+
+        // Default to server provided current if missing, or today
+        if (!currentDateStr) currentDateStr = new Date().toISOString().split('T')[0];
+
+        let date = new Date(currentDateStr);
+
+        if (currentMode === 'week') {
+            date.setDate(date.getDate() + (direction * 7 * 4)); // Shift 4 weeks? Or 1 week? User said subtract/add time based on view. "Next Page" usually means shift by VIEW SIZE (12 weeks)
+            date.setDate(date.getDate() + (direction * 12 * 7));
+        } else if (currentMode === 'month') {
+            date.setMonth(date.getMonth() + (direction * 12));
+        } else if (currentMode === 'quarter') {
+            date.setMonth(date.getMonth() + (direction * 24)); // 8 quarters = 24 months
+        }
+
+        const newDate = date.toISOString().split('T')[0];
+        urlParams.set('focus_date', newDate);
+        window.location.search = urlParams.toString();
+    }
+</script>

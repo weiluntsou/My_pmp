@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* Custom Styles for Assessment Grid */
+    .sticky-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background-color: var(--bg-color);
+        padding: 15px 0;
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: 20px;
+    }
+
+    /* Table Override */
+    .table-dark-custom {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: auto;
+        /* Allow auto-sizing based on content */
+    }
+
+    .table-dark-custom th {
+        background: rgba(13, 17, 23, 0.95);
+        color: var(--accent-cyan);
+        border-bottom: 2px solid var(--border-color);
+        padding: 12px 15px;
+        /* More padding */
+        position: sticky;
+        top: 70px;
+        /* Adjusted Offset */
+        z-index: 90;
+        white-space: nowrap;
+        /* Keep headers on one line */
+    }
+
+    .table-dark-custom td {
+        background: rgba(22, 27, 34, 0.4);
+        border-bottom: 1px solid var(--border-color);
+        padding: 8px 15px;
+        vertical-align: middle;
+        color: var(--text-primary);
+    }
+
+    .col-id {
+        width: 60px;
+        text-align: center;
+    }
+
+    .col-project {
+        min-width: 250px;
+        max-width: 400px;
+    }
+
+    .col-assignee {
+        min-width: 120px;
+        white-space: nowrap;
+    }
+
+    .col-status {
+        width: 140px;
+    }
+
+    .col-health {
+        width: 140px;
+    }
+
+    .col-progress {
+        width: 100px;
+    }
+
+    .col-note {
+        min-width: 300px;
+    }
+
+
+    .table-dark-custom tr:hover td {
+        background: rgba(0, 243, 255, 0.03);
+    }
+
+    /* Inputs */
+    .input-field {
+        background: #0d1117 !important;
+        border: 1px solid #30363d;
+        color: #e6edf3;
+        width: 100%;
+        padding: 6px;
+        border-radius: 4px;
+    }
+
+    .input-field:focus {
+        border-color: var(--accent-cyan);
+        box-shadow: 0 0 5px rgba(0, 243, 255, 0.2);
+        outline: none;
+    }
+
+    /* Unsaved Change Indicator */
+    .unsaved-row td {
+        background: rgba(255, 193, 7, 0.1) !important;
+        border-bottom: 1px solid rgba(255, 193, 7, 0.3);
+    }
+
+    /* Status Colors */
+    .status-todo {
+        color: #8b949e;
+    }
+
+    .status-inprogress {
+        color: #bc13fe;
+        font-weight: bold;
+    }
+
+    .status-done {
+        color: #00f3ff;
+        font-weight: bold;
+    }
+</style>
+
+<!-- Sticky Toolbar -->
+<div class="sticky-toolbar d-flex justify-content-between align-items-center">
+    <div class="d-flex align-items-center gap-3">
+        <button onclick="history.back()" class="btn">⬅️ Back</button>
+        <div style="font-family: 'Courier New'; font-size: 1.1em;">
+            <span style="color: var(--accent-cyan);">//</span> 專案進度評估表
+            <span class="badge"
+                style="border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.8em; margin-left: 10px;">
+                {{ sprint.name if sprint else 'No Active Sprint' }}
+            </span>
+        </div>
+    </div>
+    <div class="d-flex align-items-center">
+        <span id="change-counter" style="color: var(--accent-purple); margin-right: 15px; display:none;">0 pending
+            changes</span>
+        <button id="btn-save" class="btn" onclick="saveChanges()" disabled>
+            💾 SAVE CHANGES
+        </button>
+    </div>
+</div>
+
+<div class="card" style="padding: 0; overflow: hidden;">
+    <div style="overflow-x: auto;">
+        <table class="table-dark-custom">
+            <thead>
+                <tr>
+                    <th class="col-id">ID</th>
+                    <th class="col-project">任務名稱</th>
+                    <th class="col-assignee">負責人</th>
+                    <th class="col-status">狀態</th>
+                    <th class="col-health">健康度</th>
+                    <th class="col-progress">進度 %</th>
+                    <th class="col-note">PM 備註</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for task in tasks %}
+                <tr data-id="{{ task.id }}">
+                    <td style="color: var(--text-secondary);">#{{ task.id }}</td>
+                    <td style="font-weight: 500;">{{ task.title }}</td>
+                    <td>
+                        <span
+                            style="border: 1px solid var(--border-color); padding: 2px 6px; border-radius: 10px; font-size: 0.85em; color: var(--text-secondary);">
+                            {{ task.assignee.name if task.assignee else 'Unassigned' }}
+                        </span>
+                    </td>
+                    <td>
+                        <select class="input-field" name="status">
+                            <option value="Todo" {% if task.status=='Todo' %}selected{% endif %}>待處理</option>
+                            <option value="In Progress" {% if task.status=='In Progress' %}selected{% endif %}>進行中
+                            </option>
+                            <option value="Done" {% if task.status=='Done' %}selected{% endif %}>已完成</option>
+                        </select>
+                    </td>
+                    <td>
+                        <select class="input-field" name="health" onchange="updateHealthColor(this)">
+                            <option value="Green" style="color: #00f3ff;" {% if task.health=='Green' %}selected{% endif
+                                %}>🟢 正常</option>
+                            <option value="Yellow" style="color: #ffc107;" {% if task.health=='Yellow' %}selected{%
+                                endif %}>🟡 風險</option>
+                            <option value="Red" style="color: #ff4444;" {% if task.health=='Red' %}selected{% endif %}>
+                                🔴 落後</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" class="input-field" name="progress" value="{{ task.progress }}" min="0"
+                            max="100" style="text-align: right;">
+                    </td>
+                    <td>
+                        <input type="text" class="input-field" name="pm_note" value="{{ task.pm_note or '' }}"
+                            placeholder="Add note...">
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Simple Toast -->
+<div id="toast"
+    style="position: fixed; bottom: 20px; right: 20px; background: var(--accent-cyan); color: #000; padding: 15px 25px; border-radius: 8px; font-weight: bold; display: none; box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);">
+    ✅ Update Successful
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const saveBtn = document.getElementById('btn-save');
+    const counterSpan = document.getElementById('change-counter');
+    const toast = document.getElementById('toast');
+    let modifiedRows = new Set();
+
+    // Initialize Colors - (Optional for Select elements in dark mode, usually browser handles standard selects but custom styling helps)
+    document.querySelectorAll('select[name="health"]').forEach(el => updateHealthColor(el));
+
+    function updateHealthColor(select) {
+        // In dark mode, we might just rely on the text color or border
+        const val = select.value;
+        if (val === 'Green') select.style.color = '#00f3ff';
+        if (val === 'Yellow') select.style.color = '#ffc107';
+        if (val === 'Red') select.style.color = '#ff4444';
+    }
+
+    // Detect Changes
+    document.querySelectorAll('.input-field').forEach(input => {
+        input.addEventListener('input', function () {
+            const row = this.closest('tr');
+            row.classList.add('unsaved-row');
+            modifiedRows.add(row);
+
+            // Update UI
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = `💾 SAVE (${modifiedRows.size})`;
+            saveBtn.style.background = 'var(--accent-purple)';
+            saveBtn.style.color = '#fff';
+            counterSpan.style.display = 'inline';
+            counterSpan.innerText = `${modifiedRows.size} pending changes`;
+        });
+    });
+
+    async function saveChanges() {
+        if (modifiedRows.size === 0) return;
+
+        const updates = [];
+        modifiedRows.forEach(row => {
+            const id = row.getAttribute('data-id');
+            updates.push({
+                id: parseInt(id),
+                status: row.querySelector('[name="status"]').value,
+                health: row.querySelector('[name="health"]').value,
+                progress: parseInt(row.querySelector('[name="progress"]').value) || 0,
+                pm_note: row.querySelector('[name="pm_note"]').value
+            });
+        });
+
+        try {
+            saveBtn.innerText = "SAVING...";
+            saveBtn.disabled = true;
+
+            const response = await fetch('/pm/tasks/batch', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+
+            if (response.ok) {
+                // Reset UI
+                modifiedRows.forEach(row => row.classList.remove('unsaved-row'));
+                modifiedRows.clear();
+
+                saveBtn.innerText = "💾 SAVE CHANGES";
+                saveBtn.style.background = 'transparent';
+                saveBtn.style.color = 'var(--accent-cyan)';
+                saveBtn.disabled = true;
+                counterSpan.style.display = 'none';
+
+                // Show Toast
+                toast.style.display = 'block';
+                setTimeout(() => { toast.style.display = 'none'; }, 3000);
+            } else {
+                alert('Save failed');
+                saveBtn.disabled = false;
+            }
+        } catch (error) {
+            console.error(error);
+            alert('An error occurred.');
+            saveBtn.disabled = false;
+        }
+    }
+</script>
+{% endblock %}

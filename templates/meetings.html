@@ -8,8 +8,14 @@
         <!-- Weekly Calendar View -->
         <div class="card" style="overflow-x: auto;">
             <div
-                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; position: sticky; left: 0;">
-                <h3>Meeting Schedule</h3>
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; position: sticky; left: 0;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <button class="btn" onclick="changeWeek(-1)" title="Previous Week">&lt;</button>
+                    <h3>Meeting Schedule</h3>
+                    <button class="btn" onclick="changeWeek(1)" title="Next Week">&gt;</button>
+                    <button class="btn" onclick="goToThisWeek()" style="font-size: 0.8em; padding: 5px 10px;">This
+                        Week</button>
+                </div>
                 <div style="font-size: 0.8em; color: var(--text-secondary);">Recurrent Meetings</div>
             </div>
 
@@ -87,17 +93,6 @@
                 <label class="form-label">Actual Progress / Discussion (Updating Current Week)</label>
                 <textarea id="mgrActualDesc" class="btn" style="width: 100%; min-height: 80px; margin-bottom: 10px;"
                     placeholder="What was completed? Minutes?"></textarea>
-
-                <div class="grid-2">
-                    <div>
-                        <label class="form-label">Hours</label>
-                        <input type="number" id="mgrHours" class="btn" style="width: 100%;" step="0.5" value="0">
-                    </div>
-                    <div>
-                        <label class="form-label">Progress %</label>
-                        <input type="number" id="mgrProgress" class="btn" style="width: 100%;" value="0">
-                    </div>
-                </div>
 
                 <label class="form-label" style="margin-top: 15px;">Next Actions / Plan (Updating Next Week)</label>
                 <textarea id="mgrNextPlan" class="btn" style="width: 100%; min-height: 80px; margin-bottom: 15px;"
@@ -209,6 +204,17 @@
 
 <script>
     let allProjects = [];
+    let currentWeekOffset = 0;
+
+    function changeWeek(n) {
+        currentWeekOffset += n;
+        renderCalendar();
+    }
+
+    function goToThisWeek() {
+        currentWeekOffset = 0;
+        renderCalendar();
+    }
 
     function dateStrFromDate(d) {
         return d.toISOString().split('T')[0];
@@ -244,143 +250,144 @@
         const thisMonday = new Date(curr);
         thisMonday.setDate(curr.getDate() - distanceToMonday);
 
-        const weeks = [
-            { label: 'Last Week', offset: -1 },
-            { label: 'This Week', offset: 0 },
-            { label: 'Next Week', offset: 1 }
-        ];
-
         const daysMap = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
 
-        weeks.forEach(week => {
-            const weekStart = new Date(thisMonday);
-            weekStart.setDate(thisMonday.getDate() + (week.offset * 7));
+        // Determine Week Start based on Offset
+        const weekStart = new Date(thisMonday);
+        weekStart.setDate(thisMonday.getDate() + (currentWeekOffset * 7));
 
-            // Row Container
-            const rowDiv = document.createElement('div');
-            rowDiv.className = 'week-row';
+        // Row Container
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'week-row';
 
-            // Label
-            const labelTitle = week.offset === 0 ? "This Week" : (week.offset === -1 ? "Last Week" : "Next Week");
+        // Label
+        let labelTitle = "";
+        if (currentWeekOffset === 0) labelTitle = "This Week";
+        else if (currentWeekOffset === -1) labelTitle = "Last Week";
+        else if (currentWeekOffset === 1) labelTitle = "Next Week";
+        else {
+            const wNum = getWeekNumber(weekStart);
+            labelTitle = `Week ${wNum}`;
+        }
 
-            // Range String (Mon-Fri)
-            const weekEnd = new Date(weekStart);
-            weekEnd.setDate(weekStart.getDate() + 4); // Only til Friday
-            const rangeStr = `${weekStart.toLocaleDateString()} - ${weekEnd.toLocaleDateString()}`;
+        // Range String (Mon-Fri)
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 4); // Only til Friday
+        const rangeStr = `${weekStart.toLocaleDateString()} - ${weekEnd.toLocaleDateString()}`;
 
-            rowDiv.innerHTML = `<div class="week-label">${labelTitle} <span style="font-size:0.8em; color:var(--text-secondary); margin-left:10px;">${rangeStr}</span></div>`;
+        rowDiv.innerHTML = `<div class="week-label">${labelTitle} <span style="font-size:0.8em; color:var(--text-secondary); margin-left:10px;">${rangeStr}</span></div>`;
 
-            // Grid
-            const gridDiv = document.createElement('div');
-            gridDiv.className = 'week-grid';
+        // Grid
+        const gridDiv = document.createElement('div');
+        gridDiv.className = 'week-grid';
 
-            // 5 Days (Mon-Fri)
-            for (let i = 0; i < 5; i++) {
-                const d = new Date(weekStart);
-                d.setDate(weekStart.getDate() + i);
+        // 5 Days (Mon-Fri)
+        for (let i = 0; i < 5; i++) {
+            const d = new Date(weekStart);
+            d.setDate(weekStart.getDate() + i);
 
-                const dayName = daysMap[d.getDay()];
-                const dateStr = d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
-                const isToday = d.toDateString() === curr.toDateString();
+            const dayName = daysMap[d.getDay()];
+            const dateStr = d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+            const isToday = d.toDateString() === curr.toDateString();
 
-                const col = document.createElement('div');
-                col.className = 'cal-column';
-                col.innerHTML = `
-                    <div class="cal-header ${isToday ? 'today' : ''}">
-                        <div style="font-weight:bold;">${dayName}</div>
-                        <div>${dateStr}</div>
-                    </div>
-                    <div class="cal-body"></div>
-                `;
+            const col = document.createElement('div');
+            col.className = 'cal-column';
+            col.innerHTML = `
+                <div class="cal-header ${isToday ? 'today' : ''}">
+                    <div style="font-weight:bold;">${dayName}</div>
+                    <div>${dateStr}</div>
+                </div>
+                <div class="cal-body"></div>
+            `;
 
-                const bodyDiv = col.querySelector('.cal-body');
-                const dailyEvents = [];
+            const bodyDiv = col.querySelector('.cal-body');
+            const dailyEvents = [];
 
-                // Populate events
-                allProjects.forEach(p => {
-                    let eventData = null;
-                    const logDate = dateStrFromDate(d);
+            // Populate events
+            allProjects.forEach(p => {
+                let eventData = null;
+                // Safe local YYYY-MM-DD
+                const logDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 
-                    if (p.weekly_progress) {
-                        // 1. Specific Log?
-                        const specificLog = p.weekly_progress.find(wp => wp.meeting_date === logDate);
+                if (p.weekly_progress) {
+                    // 1. Specific Log?
+                    const specificLog = p.weekly_progress.find(wp => wp.meeting_date === logDate);
 
-                        // 2. Recurrent?
-                        const wpForWeek = p.weekly_progress.find(wp => wp.week_number === getWeekNumber(d) && wp.year === d.getFullYear());
+                    // 2. Recurrent?
+                    const wpForWeek = p.weekly_progress.find(wp => wp.week_number === getWeekNumber(d) && wp.year === d.getFullYear());
 
-                        let show = false;
-                        if (specificLog) {
-                            show = true;
-                        } else if (p.meeting_day === dayName && p.meeting_time) {
-                            // Only show recurrent if no specific log exists for this week on another day?
-                            // Logic maintained: Show if specific date matches. OR if no log for this week *at all* (or verified no date overlap), show recurrent.
-                            if (!wpForWeek || !wpForWeek.meeting_date) {
-                                show = true;
-                            }
-                        }
-
-                        if (show) {
-                            eventData = {
-                                p: p,
-                                time: p.meeting_time || '00:00',
-                                isSpecific: !!specificLog,
-                                desc: specificLog ? specificLog.actual_description : ''
-                            };
-                        }
+                    let show = false;
+                    if (specificLog) {
+                        show = true;
                     } else if (p.meeting_day === dayName && p.meeting_time) {
-                        // Fallback (no progress array)
+                        // Only show recurrent if no specific log exists for this week on another day?
+                        // Logic maintained: Show if specific date matches. OR if no log for this week *at all* (or verified no date overlap), show recurrent.
+                        if (!wpForWeek || !wpForWeek.meeting_date) {
+                            show = true;
+                        }
+                    }
+
+                    if (show) {
                         eventData = {
                             p: p,
-                            time: p.meeting_time,
-                            isSpecific: false
+                            time: p.meeting_time || '00:00',
+                            isSpecific: !!specificLog,
+                            desc: specificLog ? specificLog.actual_description : ''
                         };
                     }
+                } else if (p.meeting_day === dayName && p.meeting_time) {
+                    // Fallback (no progress array)
+                    eventData = {
+                        p: p,
+                        time: p.meeting_time,
+                        isSpecific: false
+                    };
+                }
 
-                    if (eventData) dailyEvents.push(eventData);
-                });
+                if (eventData) dailyEvents.push(eventData);
+            });
 
-                // Sort by Time
-                dailyEvents.sort((a, b) => a.time.localeCompare(b.time));
+            // Sort by Time
+            dailyEvents.sort((a, b) => a.time.localeCompare(b.time));
 
-                // Split AM/PM (Noon Separator)
-                const amEvents = dailyEvents.filter(e => e.time < '12:00');
-                const pmEvents = dailyEvents.filter(e => e.time >= '12:00');
+            // Split AM/PM (Noon Separator)
+            const amEvents = dailyEvents.filter(e => e.time < '12:00');
+            const pmEvents = dailyEvents.filter(e => e.time >= '12:00');
 
-                // Render Helper
-                const renderEvent = (e) => {
-                    const div = document.createElement('div');
-                    div.className = 'cal-event';
-                    div.innerHTML = `<strong>${e.time}</strong> ${e.p.name}`;
-                    div.title = e.desc || e.p.name;
-                    div.onclick = () => openManager(e.p.id, d);
+            // Render Helper
+            const renderEvent = (e) => {
+                const div = document.createElement('div');
+                div.className = 'cal-event';
+                div.innerHTML = `<strong>${e.time}</strong> ${e.p.name}`;
+                div.title = e.desc || e.p.name;
+                div.onclick = () => openManager(e.p.id, d);
 
-                    if (e.isSpecific) {
-                        div.style.borderLeft = '3px solid #00ff00';
-                        div.style.background = 'rgba(0, 255, 0, 0.1)';
-                    }
-                    bodyDiv.appendChild(div);
-                };
+                if (e.isSpecific) {
+                    div.style.borderLeft = '3px solid #00ff00';
+                    div.style.background = 'rgba(0, 255, 0, 0.1)';
+                }
+                bodyDiv.appendChild(div);
+            };
 
-                amEvents.forEach(renderEvent);
+            amEvents.forEach(renderEvent);
 
-                // Separator
-                const sep = document.createElement('div');
-                sep.style.borderTop = '1px dashed #444'; // Subtle separators
-                sep.style.margin = '4px 0';
-                sep.style.textAlign = 'center';
-                sep.style.fontSize = '0.6em';
-                sep.style.color = '#666';
-                sep.innerText = '12:00';
-                bodyDiv.appendChild(sep);
+            // Separator
+            const sep = document.createElement('div');
+            sep.style.borderTop = '1px dashed #444'; // Subtle separators
+            sep.style.margin = '4px 0';
+            sep.style.textAlign = 'center';
+            sep.style.fontSize = '0.6em';
+            sep.style.color = '#666';
+            sep.innerText = '12:00';
+            bodyDiv.appendChild(sep);
 
-                pmEvents.forEach(renderEvent);
+            pmEvents.forEach(renderEvent);
 
-                gridDiv.appendChild(col);
-            }
+            gridDiv.appendChild(col);
+        }
 
-            rowDiv.appendChild(gridDiv);
-            container.appendChild(rowDiv);
-        });
+        rowDiv.appendChild(gridDiv);
+        container.appendChild(rowDiv);
     }
 
     function renderList() {
@@ -485,16 +492,11 @@
         const existing = currentProject.weekly_progress.find(w => w.week_number === weekNum && w.year === date.getFullYear());
         if (existing) {
             document.getElementById('mgrActualDesc').value = existing.actual_description || '';
-            document.getElementById('mgrHours').value = existing.actual_hours || 0;
-            document.getElementById('mgrProgress').value = existing.actual_progress || 0;
-
-            // For Next Plan, we try to find Week + 1
+            // Update Next Plan
             const next = currentProject.weekly_progress.find(w => w.week_number === weekNum + 1 && w.year === date.getFullYear());
             document.getElementById('mgrNextPlan').value = next ? (next.planned_description || '') : '';
         } else {
             document.getElementById('mgrActualDesc').value = '';
-            document.getElementById('mgrHours').value = 0;
-            document.getElementById('mgrProgress').value = 0;
             document.getElementById('mgrNextPlan').value = '';
         }
     }
@@ -550,13 +552,19 @@
         if (!currentProject) return;
         const dateVal = document.getElementById('mgrDate').value;
         const actualDesc = document.getElementById('mgrActualDesc').value;
-        const hours = document.getElementById('mgrHours').value;
-        const progress = document.getElementById('mgrProgress').value;
         const nextPlan = document.getElementById('mgrNextPlan').value;
 
         const date = new Date(dateVal);
         const weekNum = getWeekNumber(date);
         const year = date.getFullYear();
+
+        // Auto-Calculate Progress
+        let calculatedProgress = 0;
+        // Assuming 52 weeks or custom duration?
+        // meetings.html does not have duration in `currentProject` explicitly if pydantic model didn't pass it fully?
+        // projects.list returns ProjectSchema which includes duration_weeks.
+        const duration = currentProject.duration_weeks || 52;
+        calculatedProgress = Math.min(100, Math.round((weekNum / duration) * 100));
 
         try {
             // 1. Save Current Week Actual
@@ -564,12 +572,9 @@
                 week_number: weekNum,
                 year: year,
                 actual_description: actualDesc,
-                actual_hours: parseFloat(hours),
-                actual_progress: parseFloat(progress),
-                meeting_date: dateVal, // Send the explicit log date
-                // We need to provide planned_progress to avoid validation error if it's new
-                // If existing, backend handles partial update? No, backend `create_weekly_progress` uses `exclude_unset=True` for update.
-                // But for create new, defaults handles it.
+                actual_hours: 0,
+                actual_progress: calculatedProgress,
+                meeting_date: dateVal,
             };
 
             await fetch(`/api/projects/${currentProject.id}/weekly_progress`, {
@@ -580,12 +585,11 @@
 
             // 2. Save Next Week Plan (if provided)
             if (nextPlan && nextPlan.trim() !== '') {
-                // Endpoint for plan update expects a LIST
                 const payload2 = [{
                     week_number: weekNum + 1,
                     year: year,
                     planned_description: nextPlan,
-                    planned_progress: 0 // Default
+                    planned_progress: 0
                 }];
 
                 await fetch(`/api/projects/${currentProject.id}/plan`, {

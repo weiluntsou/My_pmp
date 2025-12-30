@@ -56,6 +56,19 @@
     </div>
 </div>
 
+<!-- Danger Zone -->
+<div class="card" style="margin-top: 30px; border: 1px solid var(--status-red);">
+    <h3 style="color: var(--status-red); margin-bottom: 10px;">Danger Zone</h3>
+    <p style="color: var(--text-secondary); margin-bottom: 20px;">
+        Deleting the database is irreversible. All projects, tasks, and progress logs will be permanently removed.
+    </p>
+    <button class="btn"
+        style="background: rgba(255,0,0,0.1); color: var(--status-red); border: 1px solid var(--status-red); width: 100%;"
+        onclick="resetDatabase()">
+        🗑️ Delete All Database Data
+    </button>
+</div>
+
 <script>
     let allProjects = [];
 
@@ -148,6 +161,30 @@
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    }
+
+    async function resetDatabase() {
+        if (!confirm("⚠️ ARE YOU SURE?\n\nThis will DELETE ALL PROJECTS AND DATA.\nThis action cannot be undone.")) {
+            return;
+        }
+
+        // Double confirmation for safety
+        if (!confirm("This is your last chance. Confirm delete everything?")) {
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/sync/reset_database', { method: 'DELETE' });
+            if (res.ok) {
+                alert("Database has been reset.");
+                location.reload();
+            } else {
+                alert("Failed to reset database.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Error");
+        }
     }
 </script>
 {% endblock %}

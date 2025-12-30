@@ -1,9 +1,78 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div style="margin-bottom: 20px;">
-    <a href="/cft_projects" class="btn">← 專案列表</a>
-</div>
+<a href="/cft_projects" class="btn" style="margin-bottom: 20px;">← 專案列表</a>
+
+<style>
+    /* Gradient Animation for AI Loading */
+    @keyframes border-flow {
+        0% {
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 5px var(--accent-purple);
+        }
+
+        50% {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 15px var(--accent-cyan);
+        }
+
+        100% {
+            border-color: var(--accent-purple);
+            box-shadow: 0 0 5px var(--accent-purple);
+        }
+    }
+
+    .loading-glow {
+        animation: border-flow 2s infinite linear;
+    }
+
+    /* Side Drawer Styles */
+    .drawer {
+        position: fixed;
+        top: 0;
+        right: -450px;
+        width: 450px;
+        height: 100vh;
+        background: #0d1117;
+        /* Dark theme */
+        border-left: 1px solid var(--border-color);
+        box-shadow: -10px 0 30px rgba(0, 0, 0, 0.7);
+        transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        z-index: 2100;
+        /* Higher than top-nav (2000) */
+        display: flex;
+        flex-direction: column;
+    }
+
+    .drawer.open {
+        right: 0;
+    }
+
+    .drawer-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(2px);
+        z-index: 2050;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s;
+    }
+
+    .drawer-overlay.open {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .drawer-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 20px 20px 20px;
+    }
+</style>
 
 <div class="card tech-border">
     <div style="display: flex; justify-content: space-between; align-items: start;">
@@ -56,55 +125,80 @@
 </div>
 
 <!-- Add Progress Modal -->
-<div id="progressModal"
-    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 100; justify-content: center; align-items: center;">
-    <div class="card" style="width: 400px; max-width: 90%;">
-        <h3>Update Weekly Progress</h3>
+<!-- Side Drawer Overlay -->
+<div id="drawerOverlay" class="drawer-overlay" onclick="closeProgressModal()"></div>
+
+<!-- Side Drawer (Right Side) -->
+<div id="sideDrawer" class="drawer">
+    <div
+        style="padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0; color: var(--accent-cyan);">Weekly Check-in</h3>
+        <button onclick="closeProgressModal()"
+            style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem;">&times;</button>
+    </div>
+
+    <div class="drawer-content">
         <div id="pDateRange"
-            style="color: var(--accent-cyan); font-size: 0.9em; margin-bottom: 10px; text-align: center;"></div>
+            style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 20px; text-align: right;"></div>
+
         <form id="progressForm" onsubmit="submitProgress(event)">
             <div class="grid-2" style="margin-bottom: 15px;">
-                <input type="number" name="year" id="pYear" value="2025" placeholder="Year">
-                <input type="number" name="week" id="pWeek" placeholder="Week #" required readonly>
+                <input type="number" name="year" id="pYear" value="2025" placeholder="Year" readonly
+                    style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color);">
+                <input type="number" name="week" id="pWeek" placeholder="Week #" required readonly
+                    style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color);">
             </div>
 
-            <div style="margin-bottom: 15px;">
-                <label style="color:var(--accent-purple);">Actual Progress (%) (Project Total Calc)</label>
-                <input type="number" id="pActualProgress" placeholder="e.g 100" class="btn"
-                    style="width:100%; margin-top:5px; text-align:left;" step="1" max="100" min="0">
+            <!-- The AI Magic Box -->
+            <div
+                style="margin-bottom: 25px; padding: 15px; background: rgba(191, 0, 255, 0.05); border: 1px solid var(--accent-purple); border-radius: 8px;">
+                <label style="color:var(--accent-purple); font-weight: bold;">🔮 AI Magic Box (Meeting Notes)</label>
+                <textarea id="magicPaste" placeholder="Step 1: Paste raw meeting notes here..." class="btn"
+                    style="width:100%; min-height:80px; margin-top:5px; text-align:left; border: 1px dashed var(--accent-purple);"></textarea>
+                <button type="button" id="analyzeBtn" onclick="parseMeetingNotes()" class="btn"
+                    style="width: 100%; margin-top: 10px; background: var(--accent-purple); color: black; font-weight: bold;">✨
+                    Parse & Auto-Fill</button>
+
+                <!-- AI Results Visualization -->
+                <div id="aiAnalysisResult"
+                    style="display: none; margin-top: 15px; border-top: 1px solid var(--accent-purple); padding-top: 10px;">
+                    <div style="font-size: 0.8em; color: var(--text-secondary); margin-bottom: 5px;">Pivot Points
+                        Detected:</div>
+                    <div id="aiChanges" style="font-size: 0.9em;"></div>
+                </div>
             </div>
 
+            <!-- Manually Editable Fields -->
             <div style="margin-bottom: 15px;">
-                <label style="color:var(--accent-purple);">Planned Description</label>
+                <label style="color:var(--text-secondary); font-size: 0.8em;">Original Plan</label>
                 <input type="text" id="pPlannedDesc" placeholder="Kickoff..." class="btn"
-                    style="width:100%; margin-top:5px; text-align:left;" readonly>
+                    style="width:100%; margin-top:5px; text-align:left; background: rgba(0,0,0,0.2);" readonly>
             </div>
+
             <div style="margin-bottom: 15px;">
-                <label style="color:var(--accent-cyan);">Actual Description (Reporting)</label>
-                <textarea id="pActualDesc" placeholder="Enter actual progress details here involved..." class="btn"
+                <label style="color:var(--accent-cyan);">Actual Description (Auto-filled by AI)</label>
+                <textarea id="pActualDesc" placeholder="Enter actual progress details here..." class="btn"
                     style="width:100%; min-height:80px; margin-top:5px; text-align:left;"></textarea>
             </div>
-            <div style="margin-bottom: 15px;">
-                <label style="color:var(--accent-pink);">Time Spent (Hours)</label>
-                <input type="number" id="pActualHours" placeholder="e.g 8.5" class="btn" step="0.5"
-                    style="width:100%; margin-top:5px; text-align:left;">
-            </div>
 
-            <div style="display: flex; justify-content: space-between; gap: 10px;">
+
+
+            <!-- Hidden or specialized Inputs -->
+            <!-- Assuming pActualProgress is calculated or input manually? Replacing with a simpler input if not present -->
+            <!-- <input type="hidden" id="pActualProgress" ...> -->
+
+            <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 30px;">
                 <div style="display: flex; gap: 5px;">
                     <button type="button" class="btn" onclick="extendProject()"
                         style="border: 1px solid var(--accent-purple); color: var(--accent-purple); font-size: 0.8em; padding: 5px 10px;">
-                        + 追加
+                        + Extend
                     </button>
                     <button type="button" class="btn" onclick="reduceProject()"
                         style="border: 1px solid var(--accent-pink); color: var(--accent-pink); font-size: 0.8em; padding: 5px 10px;">
-                        - 縮減
+                        - Reduce
                     </button>
                 </div>
-                <div style="display: flex; gap: 10px;">
-                    <button type="button" class="btn" onclick="closeProgressModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save</button>
-                </div>
+                <button type="submit" class="btn btn-primary" style="flex: 1;">Save Updates</button>
             </div>
         </form>
     </div>
@@ -240,15 +334,17 @@
             console.error(e);
         }
 
-        // --- Fix for Template Variable Injection ---
-        // New Logic: Always 52 Weeks for the Project Year
-        const projectYear = {{ project.year or 2025 }};
-    const totalWeeks = 52;
+        // --- Refactored: Read safely from DOM to prevent Template Syntax Errors ---
+        const metaDiv = document.getElementById('project-meta');
+        const projectYear = metaDiv ? parseInt(metaDiv.dataset.year) : 2025;
+        const totalWeeks = 52;
     }
 
     function openProgressModal(data = null, type = 'planned') {
-        const modal = document.getElementById('progressModal');
-        modal.style.display = 'flex';
+        const drawer = document.getElementById('sideDrawer');
+        const overlay = document.getElementById('drawerOverlay');
+        drawer.classList.add('open');
+        overlay.classList.add('open');
 
         if (data) {
             document.getElementById('pYear').value = data.year;
@@ -273,24 +369,57 @@
             const aDescInput = document.getElementById('pActualDesc');
             if (pDescInput) pDescInput.value = data.planned_description || '';
             if (aDescInput) aDescInput.value = data.actual_description || '';
-            const pActualProg = document.getElementById('pActualProgress');
-            if (pActualProg) pActualProg.value = data.actual_progress || 0;
+
+            // Clear Magic Box
+            document.getElementById('magicPaste').value = '';
+            document.getElementById('aiAnalysisResult').style.display = 'none';
         } else {
             const today = new Date();
             document.getElementById('pYear').value = today.getFullYear();
             document.getElementById('pWeek').value = '';
             document.getElementById('pPlannedDesc').value = '';
             document.getElementById('pActualDesc').value = '';
-            document.getElementById('pActualHours').value = '';
-            document.getElementById('pActualProgress').value = '';
+            document.getElementById('pActualDesc').value = '';
         }
-        if (data && data.actual_hours) {
-            document.getElementById('pActualHours').value = data.actual_hours;
-        }
+    }
     }
 
     function closeProgressModal() {
-        document.getElementById('progressModal').style.display = 'none';
+        document.getElementById('sideDrawer').classList.remove('open');
+        document.getElementById('drawerOverlay').classList.remove('open');
+    }
+
+    // AI Magic Box Logic
+    async function parseMeetingNotes() {
+        const notes = document.getElementById('magicPaste').value;
+        if (!notes) {
+            alert('Please paste meeting notes first!');
+            return;
+        }
+
+        const analysisDiv = document.getElementById('aiAnalysisResult');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+
+        // Visual Feedback
+        analyzeBtn.innerHTML = '🤖 Analyzing...';
+        analysisDiv.style.display = 'block';
+        analysisDiv.classList.add('loading-glow');
+
+        // Simulate AI Processing (Mockup for now)
+        setTimeout(() => {
+            analyzeBtn.innerHTML = '✨ AI Analysis Complete';
+            analysisDiv.classList.remove('loading-glow');
+
+            // Auto-fill fields based on "AI" extraction
+            document.getElementById('pActualDesc').value = "• Discussed features from notes\n• Resolved API latency issue\n• Updated timeline";
+
+
+            document.getElementById('aiChanges').innerHTML = `
+                <div style="color: var(--accent-cyan);">+ Added: User Auth Module</div>
+                <div style="color: var(--accent-pink);">- Delayed: Report Export</div>
+            `;
+
+        }, 1500);
     }
 
     async function submitProgress(e) {
@@ -299,6 +428,23 @@
         const week = document.getElementById('pWeek').value;
         const plannedDesc = document.getElementById('pPlannedDesc').value;
         const actualDesc = document.getElementById('pActualDesc').value;
+
+        // Auto-Calculate Progress % based on Time
+        // Logic: (Current Week / Total Weeks) * 100? Or Date based?
+        // User asked for: "起始日至當下日期的百分比" (Start Date to Current Date percentage)
+        // We need project start date.
+        // Let's assume Week 1 is Start.
+        // Current Week / Total Weeks (52) or Project Duration?
+        // Let's use Week Number / 52 for now as a robust default for "Current Date % of Year", 
+        // or Week / Duration if project has duration.
+
+        let calculatedProgress = 0;
+        if (projectDuration > 0) {
+            calculatedProgress = Math.min(100, Math.round((parseInt(week) / projectDuration) * 100));
+        } else {
+            // Fallback to 52 weeks
+            calculatedProgress = Math.min(100, Math.round((parseInt(week) / 52) * 100));
+        }
 
         try {
             const response = await fetch(`/api/projects/${projectId}/weekly_progress`, {
@@ -309,8 +455,8 @@
                     week_number: parseInt(week),
                     planned_description: plannedDesc,
                     actual_description: actualDesc,
-                    actual_hours: parseFloat(document.getElementById('pActualHours').value || 0),
-                    actual_progress: parseInt(document.getElementById('pActualProgress').value || 0)
+                    actual_hours: 0, // Removed per request
+                    actual_progress: calculatedProgress // Auto-calculated
                 })
             });
 

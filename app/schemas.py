@@ -93,6 +93,7 @@ class ProjectBase(BaseModel):
     duration_weeks: Optional[int] = 12
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    predicted_end_date: Optional[date] = None
     closure_date: Optional[date] = None
     kickoff_date: Optional[date] = None # Changed to date
     lead_engineer_id: Optional[int] = None

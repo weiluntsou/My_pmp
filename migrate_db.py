@@ -19,5 +19,6 @@ add_column("weekly_progress", "actual_hours", "FLOAT", "0")
 add_column("maintenance_logs", "hours_spent", "FLOAT", "0")
 add_column("projects", "meeting_day", "VARCHAR")
 add_column("projects", "meeting_time", "VARCHAR")
+add_column("projects", "predicted_end_date", "DATE")
 
 print("Migration complete.")

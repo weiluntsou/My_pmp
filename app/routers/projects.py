@@ -14,6 +14,18 @@ router = APIRouter(
 @router.get("/", response_model=List[schemas.Project])
 def read_projects(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     projects = db.query(models.Project).options(joinedload(models.Project.lead_engineer)).offset(skip).limit(limit).all()
+    
+    # Recalculate progress based on time if dates are available
+    from datetime import date
+    today = date.today()
+    for p in projects:
+        if p.start_date and p.predicted_end_date:
+            total_days = (p.predicted_end_date - p.start_date).days
+            if total_days > 0:
+                elapsed = (today - p.start_date).days
+                new_prog = int((elapsed / total_days) * 100)
+                p.progress = max(0, min(100, new_prog))
+    
     return projects
 
 # Engineer endpoints (Simple version inside projects router for now)
@@ -163,6 +175,17 @@ def read_project(project_id: int, db: Session = Depends(get_db)):
     db_project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if db_project is None:
         raise HTTPException(status_code=404, detail="Project not found")
+        
+    # Recalculate progress based on time
+    if db_project.start_date and db_project.predicted_end_date:
+        from datetime import date
+        today = date.today()
+        total_days = (db_project.predicted_end_date - db_project.start_date).days
+        if total_days > 0:
+            elapsed = (today - db_project.start_date).days
+            new_prog = int((elapsed / total_days) * 100)
+            db_project.progress = max(0, min(100, new_prog))
+            
     return db_project
 
 @router.put("/{project_id}", response_model=schemas.Project)

@@ -50,11 +50,31 @@
             pContainer.style.display = 'block';
             pLabel.innerText = "Week Number";
             pInput.type = "number";
-            // Default to current week logic could be added here
+
+            // Auto-set to Previous Week
+            const now = new Date();
+            const startOfYear = new Date(now.getFullYear(), 0, 1);
+            const day = Math.floor((now - startOfYear) / (24 * 60 * 60 * 1000));
+            const currentWeek = Math.ceil((now.getDay() + 1 + day) / 7);
+
+            let targetWeek = currentWeek - 1;
+            let targetYear = now.getFullYear();
+
+            if (targetWeek < 1) {
+                targetWeek = 52;
+                targetYear -= 1;
+            }
+
+            document.getElementById('rYear').value = targetYear;
+            pInput.value = targetWeek;
         } else if (type === 'monthly') {
             pContainer.style.display = 'block';
             pLabel.innerText = "Month (1-12)";
             pInput.type = "number";
+            // Auto-set to current Month/Year
+            const now = new Date();
+            document.getElementById('rYear').value = now.getFullYear();
+            pInput.value = now.getMonth() + 1;
         } else {
             // Keynotes don't need period
             pContainer.style.display = 'none';

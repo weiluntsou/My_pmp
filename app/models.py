@@ -49,7 +49,8 @@ class Project(Base):
     progress = Column(Integer, default=0) # 0-100
     description = Column(Text, nullable=True)
     start_date = Column(Date, nullable=True)
-    end_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True) # Original planned end date?
+    predicted_end_date = Column(Date, nullable=True) # New user requested field
     closure_date = Column(Date, nullable=True) # Date moved to maintenance
     kickoff_date = Column(Date, nullable=True)
     
@@ -118,6 +119,8 @@ class Sprint(Base):
     name = Column(String, index=True)
     start_date = Column(Date)
     end_date = Column(Date)
+    predicted_end_date = Column(Date, nullable=True) # Added based on instruction interpretation
+    closure_date = Column(Date, nullable=True) # Added based on instruction interpretation
     status = Column(String, default="future") # active, future, closed
     project_id = Column(Integer, ForeignKey("projects.id"))
 
@@ -141,6 +144,8 @@ class Task(Base):
     status = Column(String, default="Todo") # Todo, In Progress, Done
     health = Column(String, default="Green") # Green, Yellow, Red
     progress = Column(Integer, default=0) # 0-100
+    baseline_start = Column(Date, nullable=True)
+    baseline_end = Column(Date, nullable=True)
     pm_note = Column(Text, nullable=True) # Private PM remarks
 
     project = relationship("Project", back_populates="tasks")

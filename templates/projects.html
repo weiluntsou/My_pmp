@@ -100,6 +100,10 @@
                 <input type="number" id="npDuration" placeholder="Duration (Weeks)" value="12" class="btn"
                     style="text-align: left;" required>
             </div>
+            <div class="grid-2">
+                <label style="font-size: 0.8em; color: var(--text-secondary);">Predicted End Date (預計結案日)</label>
+                <input type="date" id="npPredictedEnd" class="btn" style="text-align: left;">
+            </div>
             <textarea id="npDesc" placeholder="Description" class="btn"
                 style="text-align: left; min-height: 100px;"></textarea>
             <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
@@ -266,7 +270,9 @@
                 year: parseInt(year),
                 start_date: startDate,
                 duration_weeks: parseInt(duration),
+                duration_weeks: parseInt(duration),
                 kickoff_date: kickoff || null,
+                predicted_end_date: document.getElementById('npPredictedEnd').value || null,
                 description: desc,
                 request_unit: requestUnit || null,
                 lead_engineer_name: leadName || null

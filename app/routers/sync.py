@@ -30,6 +30,7 @@ def generate_markdown_content(projects: List[models.Project]) -> str:
         # Key Dates
         dates = []
         if p.start_date: dates.append(f"Start={p.start_date}")
+        if p.predicted_end_date: dates.append(f"PredictedEnd={p.predicted_end_date}")
         if p.kickoff_date: dates.append(f"Kickoff={p.kickoff_date}")
         if p.closure_date: dates.append(f"Closure={p.closure_date}")
         lines.append(f"- Key Dates: {', '.join(dates)}")
@@ -262,6 +263,7 @@ async def import_projects(file: UploadFile = File(...), db: Session = Depends(ge
             
         # Update extra fields
         if 'Start' in info: project.start_date = datetime.strptime(info['Start'], '%Y-%m-%d').date()
+        if 'PredictedEnd' in info: project.predicted_end_date = datetime.strptime(info['PredictedEnd'], '%Y-%m-%d').date()
         if 'Kickoff' in info: project.kickoff_date = datetime.strptime(info['Kickoff'], '%Y-%m-%d').date()
         if 'Closure' in info: project.closure_date = datetime.strptime(info['Closure'], '%Y-%m-%d').date()
         if 'meeting_day' in info: project.meeting_day = info['meeting_day']
@@ -364,3 +366,21 @@ async def import_projects(file: UploadFile = File(...), db: Session = Depends(ge
         db.commit()
 
     return {"status": "success", "logs": log_messages}
+
+@router.delete("/reset_database")
+def reset_database(db: Session = Depends(get_db)):
+    try:
+        # Delete all data from tables
+        # Order matters for Foreign Keys if strict
+        db.query(models.WeeklyProgress).delete()
+        db.query(models.ProjectLog).delete()
+        db.query(models.Task).delete()
+        db.query(models.Sprint).delete()
+        db.query(models.Project).delete()
+        db.query(models.Engineer).delete()
+        
+        db.commit()
+        return {"status": "success", "message": "All database data has been deleted."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
